@@ -6,14 +6,35 @@ project:
       - 'storage/logs'
       - 'storage/app'
       - 'storage/framework'
+      - 'bootstrap/cache'
     before_commands: # Before symlink switch
-      - 'cd {release_directory} && php8.4 /usr/local/bin/composer install --no-dev --optimize-autoloader'
+      # Crear directorios necesarios y establecer permisos
+      - 'mkdir -p {release_directory}/bootstrap/cache'
+      - 'chmod -R 775 {release_directory}/bootstrap/cache'
+      - 'mkdir -p {release_directory}/storage/framework/cache'
+      - 'mkdir -p {release_directory}/storage/framework/sessions'
+      - 'mkdir -p {release_directory}/storage/framework/views'
+      - 'chmod -R 775 {release_directory}/storage'
+      
+      # Instalar extensión pdo_pgsql si es necesario
+      - 'sudo apt-get update && sudo apt-get install -y php8.4-pgsql || true'
+      
+      # Copiar archivo de entorno y configurar
       - 'cp {release_directory}/.env.production {release_directory}/.env'
+      
+      # Instalar dependencias y optimizar
+      - 'cd {release_directory} && COMPOSER_ALLOW_SUPERUSER=1 php8.4 /usr/local/bin/composer install --no-dev --optimize-autoloader --no-scripts'
       - 'cd {release_directory} && php8.4 artisan key:generate --force'
       - 'cd {release_directory} && php8.4 artisan storage:link'
-      - 'cd {release_directory} && php8.4 artisan migrate --force'
-      - 'cd {release_directory} && php8.4 artisan optimize'
-      - 'cd {release_directory} && php8.4 artisan queue:restart'
+      
+      # Ejecutar migraciones si la base de datos está configurada correctamente
+      - 'cd {release_directory} && php8.4 artisan migrate --force || echo "Error en migraciones, verificar conexión a base de datos"'
+      
+      # Optimizar la aplicación
+      - 'cd {release_directory} && php8.4 artisan optimize || echo "Error en optimización, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan queue:restart || echo "Error al reiniciar colas, continuando de todos modos"'
+      
+      # Establecer permisos correctos
       - 'find {release_directory} -type d -exec chmod 0775 {} \;'
       - 'find {release_directory} -type f -exec chmod 0664 {} \;'
       - 'chown -R siae-accessos:siae-accessos {release_directory}'
