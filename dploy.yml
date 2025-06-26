@@ -19,8 +19,60 @@ project:
       # Instalar extensión pdo_pgsql si es necesario
       - 'sudo apt-get update && sudo apt-get install -y php8.4-pgsql || true'
       
-      # Copiar archivo de entorno y configurar
-      - 'cp {release_directory}/.env.production {release_directory}/.env'
+      # Crear archivo .env directamente en el servidor
+      - 'cat > {release_directory}/.env << "EOL"
+APP_NAME="Gestió d\'Accessos"
+APP_ENV=production
+APP_KEY=base64:hjbgRY5bMhvJIxlUxJ+gLqHLJwgH8QyFulCPFLnZ8R4=
+APP_DEBUG=false
+APP_URL=https://accessos.siae.cat
+
+# PostgreSQL Configuration
+DB_CONNECTION=pgsql
+DB_HOST=10.0.2.10
+DB_PORT=5432
+DB_DATABASE=gestio-accessos
+DB_USERNAME=siae
+DB_PASSWORD=zmqxZY5SXD0tIl5ULi2i
+
+# LDAP Configuration
+LDAP_LOGGING=false
+LDAP_CONNECTION=default
+LDAP_HOST=esparreguera.local
+LDAP_USERNAME=escuda@esparreguera.local
+LDAP_PASSWORD=Pcrjls4j*
+LDAP_PORT=389
+LDAP_BASE_DN=dc=esparreguera,dc=local
+LDAP_TIMEOUT=5
+LDAP_SSL=false
+LDAP_TLS=false
+
+# Email Configuration
+MAIL_MAILER=smtp
+MAIL_HOST=hathor.esparreguera.local
+MAIL_PORT=25
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_ENCRYPTION=
+MAIL_FROM_ADDRESS=noreply@esparreguera.cat
+MAIL_FROM_NAME="SSO Corporativo"
+
+# Queue and Cache
+QUEUE_CONNECTION=database
+CACHE_DRIVER=file
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+
+# Optimizaciones de producción
+BROADCAST_DRIVER=log
+LOG_CHANNEL=stack
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=error
+
+# Configuración de seguridad
+SANCTUM_STATEFUL_DOMAINS=accessos.siae.cat
+SESSION_SECURE_COOKIE=true
+EOL'
       
       # Instalar dependencias y optimizar
       - 'cd {release_directory} && COMPOSER_ALLOW_SUPERUSER=1 php8.4 /usr/local/bin/composer install --no-dev --optimize-autoloader --no-scripts'
