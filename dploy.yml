@@ -79,6 +79,11 @@ EOL'
       - 'cd {release_directory} && php8.4 artisan key:generate --force'
       - 'cd {release_directory} && php8.4 artisan storage:link'
       
+      # Instalar dependencias de npm y compilar assets
+      - 'cd {release_directory} && npm install || echo "Error en npm install, continuando de todos modos"'
+      - 'cd {release_directory} && npm run build || echo "Error en npm run build, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan vendor:publish --tag=filament-assets --force || echo "Error al publicar assets de Filament, continuando de todos modos"'
+      
       # Ejecutar migraciones si la base de datos está configurada correctamente
       - 'cd {release_directory} && php8.4 artisan migrate --force || echo "Error en migraciones, verificar conexión a base de datos"'
       
