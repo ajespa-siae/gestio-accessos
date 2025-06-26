@@ -123,26 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Autoloaded Service Providers
-    |--------------------------------------------------------------------------
-    |
-    | The service providers listed here will be automatically loaded on the
-    | request to your application. Feel free to add your own services to
-    | this array to grant expanded functionality to your applications.
-    |
-    */
 
-    'providers' => [
-        // Laravel Framework Service Providers...
-        // Los proveedores del framework se cargan automáticamente
-        
-        // Application Service Providers...
-        App\Providers\AppServiceProvider::class,
-        
-        // Filament Service Provider
-        App\Providers\FilamentServiceProvider::class,
-    ],
 
 ];
