@@ -31,22 +31,28 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function registerFilamentRoutes(): void
     {
-        // Verificar si estamos en producción
-        if (app()->environment('production')) {
-            // Ruta POST para login
-            if (!Route::has('filament.admin.auth.login')) {
-                Route::post('/admin/login', function () {
-                    // Intentar cargar el controlador de login de Filament
-                    $controllerClass = '\Filament\Http\Controllers\Auth\LoginController';
-                    
-                    if (class_exists($controllerClass)) {
-                        return app($controllerClass)->login();
-                    }
-                    
-                    // Si no existe el controlador, redirigir a la página de login
-                    return redirect('/admin/login');
-                })->name('filament.admin.auth.login');
+        // Siempre registrar las rutas, independientemente del entorno
+        // Registrar la ruta POST para login con el nombre correcto
+        Route::post('/admin/login', function () {
+            // Intentar procesar el login manualmente
+            $request = request();
+            $email = $request->input('email');
+            $password = $request->input('password');
+            $remember = $request->boolean('remember');
+            
+            // Intentar autenticar al usuario
+            if (auth()->attempt(['email' => $email, 'password' => $password], $remember)) {
+                // Regenerar la sesión
+                $request->session()->regenerate();
+                
+                // Redirigir al dashboard
+                return redirect('/admin');
             }
-        }
+            
+            // Si falla la autenticación, redirigir de vuelta con error
+            return back()->withErrors([
+                'email' => 'Las credenciales proporcionadas no coinciden con nuestros registros.',
+            ]);
+        });
     }
 }
