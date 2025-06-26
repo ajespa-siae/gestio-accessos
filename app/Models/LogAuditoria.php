@@ -5,18 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class LogAuditoria extends Model
 {
     use HasFactory;
 
     protected $table = 'logs_auditoria';
-    
-    /**
-     * Deshabilitar timestamps automàtics perquè usem 'timestamp'
-     */
-    public $timestamps = false;
-    
+
     protected $fillable = [
         'user_id',
         'accio',
@@ -27,228 +23,122 @@ class LogAuditoria extends Model
         'dades_despres',
         'ip_address',
         'user_agent',
-        'timestamp',
+        'timestamp'
     ];
 
     protected $casts = [
-        'timestamp' => 'datetime',
-        'dades_abans' => 'array',
-        'dades_despres' => 'array',
+        'timestamp' => 'datetime'
     ];
 
-    /**
-     * Boot del model
-     */
-    protected static function booted()
-    {
-        static::creating(function ($log) {
-            // Establir timestamp si no s'ha especificat
-            if (!$log->timestamp) {
-                $log->timestamp = now();
-            }
-            
-            // Establir IP i user agent si no s'han especificat
-            if (!$log->ip_address && request()) {
-                $log->ip_address = request()->ip();
-            }
-            
-            if (!$log->user_agent && request()) {
-                $log->user_agent = request()->userAgent();
-            }
-        });
-    }
+    public $timestamps = false; // Usem timestamp custom
 
-    /**
-     * Usuari que ha realitzat l'acció
-     */
+    // Relacions
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Crear un log d'auditoria
-     */
-    public static function log(string $accio, Model $model, array $dadesAbans = null): self
-    {
-        return self::create([
-            'user_id' => auth()->id(),
-            'accio' => $accio,
-            'taula_afectada' => $model->getTable(),
-            'registre_id' => $model->getKey(),
-            'identificador_proces' => $model->identificador_unic ?? null,
-            'dades_abans' => $dadesAbans,
-            'dades_despres' => $model->getAttributes(),
-        ]);
-    }
-
-    /**
-     * Obtenir descripció de l'acció
-     */
-    public function getDescripcioAccioAttribute(): string
-    {
-        $descripcions = [
-            'created' => 'Creat',
-            'updated' => 'Actualitzat',
-            'deleted' => 'Eliminat',
-            'restored' => 'Restaurat',
-            'login' => 'Inici de sessió',
-            'logout' => 'Tancament de sessió',
-            'approved' => 'Aprovat',
-            'rejected' => 'Rebutjat',
-            'completed' => 'Completat',
-        ];
-
-        return $descripcions[$this->accio] ?? ucfirst($this->accio);
-    }
-
-    /**
-     * Obtenir els canvis realitzats
-     */
-    public function getCanvisAttribute(): array
-    {
-        if (!$this->dades_abans || !$this->dades_despres) {
-            return [];
-        }
-
-        $canvis = [];
-        $ignorar = ['updated_at', 'created_at'];
-
-        foreach ($this->dades_despres as $key => $valorNou) {
-            if (in_array($key, $ignorar)) {
-                continue;
-            }
-
-            $valorAntic = $this->dades_abans[$key] ?? null;
-            
-            if ($valorAntic != $valorNou) {
-                $canvis[$key] = [
-                    'abans' => $valorAntic,
-                    'despres' => $valorNou,
-                ];
-            }
-        }
-
-        return $canvis;
-    }
-
-    /**
-     * Verificar si hi ha canvis
-     */
-    public function teCanvis(): bool
-    {
-        return count($this->getCanvisAttribute()) > 0;
-    }
-
-    /**
-     * Obtenir descripció dels canvis en format text
-     */
-    public function getDescripcioCanvisAttribute(): string
-    {
-        $canvis = $this->getCanvisAttribute();
-        
-        if (empty($canvis)) {
-            return 'Sense canvis';
-        }
-
-        $descripcions = [];
-        foreach ($canvis as $camp => $valors) {
-            $abans = $valors['abans'] ?? 'buit';
-            $despres = $valors['despres'] ?? 'buit';
-            
-            // Formatjar valors especials
-            if (is_bool($abans)) $abans = $abans ? 'Sí' : 'No';
-            if (is_bool($despres)) $despres = $despres ? 'Sí' : 'No';
-            if (is_array($abans)) $abans = json_encode($abans);
-            if (is_array($despres)) $despres = json_encode($despres);
-            
-            $descripcions[] = "{$camp}: {$abans} → {$despres}";
-        }
-
-        return implode(', ', $descripcions);
-    }
-
-    /**
-     * Obtenir navegador des del user agent
-     */
-    public function getNavegadorAttribute(): string
-    {
-        if (!$this->user_agent) {
-            return 'Desconegut';
-        }
-
-        $userAgent = strtolower($this->user_agent);
-        
-        if (str_contains($userAgent, 'chrome')) return 'Chrome';
-        if (str_contains($userAgent, 'firefox')) return 'Firefox';
-        if (str_contains($userAgent, 'safari')) return 'Safari';
-        if (str_contains($userAgent, 'edge')) return 'Edge';
-        if (str_contains($userAgent, 'opera')) return 'Opera';
-        
-        return 'Altre';
-    }
-
-    /**
-     * Obtenir sistema operatiu des del user agent
-     */
-    public function getSistemaOperatiuAttribute(): string
-    {
-        if (!$this->user_agent) {
-            return 'Desconegut';
-        }
-
-        $userAgent = strtolower($this->user_agent);
-        
-        if (str_contains($userAgent, 'windows')) return 'Windows';
-        if (str_contains($userAgent, 'mac')) return 'macOS';
-        if (str_contains($userAgent, 'linux')) return 'Linux';
-        if (str_contains($userAgent, 'android')) return 'Android';
-        if (str_contains($userAgent, 'iphone') || str_contains($userAgent, 'ipad')) return 'iOS';
-        
-        return 'Altre';
-    }
-
-    /**
-     * Scopes
-     */
-    public function scopePerUsuari($query, $userId)
+    // Scopes
+    public function scopePerUsuari(Builder $query, int $userId): Builder
     {
         return $query->where('user_id', $userId);
     }
 
-    public function scopePerProces($query, $identificador)
-    {
-        return $query->where('identificador_proces', $identificador);
-    }
-
-    public function scopePerPeriode($query, $desde, $fins)
-    {
-        return $query->whereBetween('timestamp', [$desde, $fins]);
-    }
-
-    public function scopePerTaula($query, $taula)
-    {
-        return $query->where('taula_afectada', $taula);
-    }
-
-    public function scopePerAccio($query, $accio)
+    public function scopePerAccio(Builder $query, string $accio): Builder
     {
         return $query->where('accio', $accio);
     }
 
-    public function scopeRecents($query, $hores = 24)
+    public function scopePerTaula(Builder $query, string $taula): Builder
     {
-        return $query->where('timestamp', '>=', now()->subHours($hores));
+        return $query->where('taula_afectada', $taula);
     }
 
-    public function scopeAvui($query)
+    public function scopePerProces(Builder $query, string $identificador): Builder
     {
-        return $query->whereDate('timestamp', today());
+        return $query->where('identificador_proces', $identificador);
     }
 
-    public function scopeAquestMes($query)
+    public function scopeEntreDates(Builder $query, $desde, $fins): Builder
     {
-        return $query->whereMonth('timestamp', now()->month)
-            ->whereYear('timestamp', now()->year);
+        return $query->whereBetween('timestamp', [$desde, $fins]);
+    }
+
+    public function scopeRecents(Builder $query, int $dies = 30): Builder
+    {
+        return $query->where('timestamp', '>=', now()->subDays($dies));
+    }
+
+    // Methods
+    public function getDadesAbansDecoded(): ?array
+    {
+        return $this->dades_abans ? json_decode($this->dades_abans, true) : null;
+    }
+
+    public function getDadesDespresDecoded(): ?array
+    {
+        return $this->dades_despres ? json_decode($this->dades_despres, true) : null;
+    }
+
+    public function getCanvis(): array
+    {
+        $abans = $this->getDadesAbansDecoded() ?? [];
+        $despres = $this->getDadesDespresDecoded() ?? [];
+        
+        $canvis = [];
+        
+        foreach ($despres as $clau => $valorDespres) {
+            $valorAbans = $abans[$clau] ?? null;
+            
+            if ($valorAbans !== $valorDespres) {
+                $canvis[$clau] = [
+                    'abans' => $valorAbans,
+                    'despres' => $valorDespres
+                ];
+            }
+        }
+        
+        return $canvis;
+    }
+
+    public function getAccioFormatted(): string
+    {
+        return match($this->accio) {
+            'created' => '➕ Creat',
+            'updated' => '✏️ Actualitzat',
+            'deleted' => '🗑️ Eliminat',
+            default => $this->accio
+        };
+    }
+
+    public function getNomUsuari(): string
+    {
+        return $this->user?->name ?? 'Sistema';
+    }
+
+    public function teCanvis(): bool
+    {
+        return !empty($this->getCanvis());
+    }
+
+    public static function registrar(
+        string $accio,
+        Model $model,
+        ?array $dadesAbans = null,
+        ?string $identificadorProces = null,
+        ?int $userId = null
+    ): self {
+        return self::create([
+            'user_id' => $userId ?? auth()->id(),
+            'accio' => $accio,
+            'taula_afectada' => $model->getTable(),
+            'registre_id' => $model->getKey(),
+            'identificador_proces' => $identificadorProces,
+            'dades_abans' => $dadesAbans ? json_encode($dadesAbans) : null,
+            'dades_despres' => json_encode($model->getAttributes()),
+            'ip_address' => request()?->ip(),
+            'user_agent' => request()?->userAgent(),
+            'timestamp' => now()
+        ]);
     }
 }

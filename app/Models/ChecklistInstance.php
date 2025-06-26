@@ -6,82 +6,93 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Jobs\ProcessarChecklistCompletada;
+use Illuminate\Database\Eloquent\Builder;
+use App\Traits\Auditable;
 
 class ChecklistInstance extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
-    protected $table = 'checklist_instances';
-    
     protected $fillable = [
         'empleat_id',
         'template_id',
         'estat',
-        'data_finalitzacio',
+        'data_finalitzacio'
     ];
 
     protected $casts = [
-        'data_finalitzacio' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'data_finalitzacio' => 'datetime'
     ];
 
-    /**
-     * Empleat associat a aquesta checklist
-     */
+    // Model Events
+    protected static function booted()
+    {
+        static::updated(function ($instance) {
+            if ($instance->wasChanged('estat') && $instance->estat === 'completada') {
+                dispatch(new \App\Jobs\ProcessarChecklistCompletada($instance));
+            }
+        });
+    }
+
+    // Relacions
     public function empleat(): BelongsTo
     {
         return $this->belongsTo(Empleat::class);
     }
 
-    /**
-     * Template utilitzat per aquesta instància
-     */
     public function template(): BelongsTo
     {
-        return $this->belongsTo(ChecklistTemplate::class);
+        return $this->belongsTo(ChecklistTemplate::class, 'template_id');
     }
 
-    /**
-     * Tasques d'aquesta checklist
-     */
     public function tasques(): HasMany
     {
-        return $this->hasMany(ChecklistTask::class)->orderBy('ordre');
+        return $this->hasMany(ChecklistTask::class, 'checklist_instance_id')->orderBy('ordre');
     }
 
-    /**
-     * Accessor per saber si està completada
-     */
-    public function getEsCompletadaAttribute(): bool
+    public function tasquesPendents(): HasMany
     {
-        return $this->estat === 'completada';
+        return $this->hasMany(ChecklistTask::class, 'checklist_instance_id')
+                    ->where('completada', false)
+                    ->orderBy('ordre');
     }
 
-    /**
-     * Accessor per obtenir el percentatge de progrés
-     */
-    public function getProgressPercentatgeAttribute(): int
+    public function tasquesCompletades(): HasMany
     {
-        $total = $this->tasques->count();
-        if ($total === 0) return 0;
-        
-        $completades = $this->tasques->where('completada', true)->count();
-        return round(($completades / $total) * 100);
+        return $this->hasMany(ChecklistTask::class, 'checklist_instance_id')
+                    ->where('completada', true)
+                    ->orderBy('data_completada');
     }
 
-    /**
-     * Accessor per obtenir el tipus de checklist
-     */
-    public function getTipusAttribute(): string
+    // Scopes
+    public function scopePerEstat(Builder $query, string $estat): Builder
     {
-        return $this->template?->tipus ?? 'unknown';
+        return $query->where('estat', $estat);
     }
 
-    /**
-     * Actualitzar l'estat segons les tasques completades
-     */
+    public function scopePendents(Builder $query): Builder
+    {
+        return $query->where('estat', 'pendent');
+    }
+
+    public function scopeEnProgres(Builder $query): Builder
+    {
+        return $query->where('estat', 'en_progres');
+    }
+
+    public function scopeCompletades(Builder $query): Builder
+    {
+        return $query->where('estat', 'completada');
+    }
+
+    public function scopePerTipus(Builder $query, string $tipus): Builder
+    {
+        return $query->whereHas('template', function($q) use ($tipus) {
+            $q->where('tipus', $tipus);
+        });
+    }
+
+    // Methods
     public function actualitzarEstat(): void
     {
         $total = $this->tasques()->count();
@@ -92,108 +103,81 @@ class ChecklistInstance extends Model
         }
 
         if ($completades === 0) {
-            $estat = 'pendent';
-            $dataFinalitzacio = null;
+            $nouEstat = 'pendent';
         } elseif ($completades === $total) {
-            $estat = 'completada';
+            $nouEstat = 'completada';
             $dataFinalitzacio = now();
         } else {
-            $estat = 'en_progres';
+            $nouEstat = 'en_progres';
             $dataFinalitzacio = null;
         }
 
         $this->update([
-            'estat' => $estat,
-            'data_finalitzacio' => $dataFinalitzacio,
+            'estat' => $nouEstat,
+            'data_finalitzacio' => $dataFinalitzacio ?? $this->data_finalitzacio
         ]);
-
-        // Si s'ha completat, disparar automatismes
-        if ($estat === 'completada') {
-            dispatch(new ProcessarChecklistCompletada($this));
-        }
     }
 
-    /**
-     * Obtenir tasques pendents
-     */
-    public function tasquesPendents()
+    public function getProgressPercentage(): int
     {
-        return $this->tasques()->where('completada', false);
+        $total = $this->tasques()->count();
+        if ($total === 0) return 100;
+
+        $completades = $this->tasques()->where('completada', true)->count();
+        return round(($completades / $total) * 100);
     }
 
-    /**
-     * Obtenir tasques completades
-     */
-    public function tasquesCompletades()
+    public function getTasquesPendentsCount(): int
     {
-        return $this->tasques()->where('completada', true);
+        return $this->tasquesPendents()->count();
     }
 
-    /**
-     * Obtenir tasques obligatòries pendents
-     */
-    public function tasquesObligatoriesPendents()
+    public function getTasquesCompletadesCount(): int
     {
-        return $this->tasques()
-            ->where('completada', false)
-            ->where('obligatoria', true);
+        return $this->tasquesCompletades()->count();
     }
 
-    /**
-     * Verificar si totes les tasques obligatòries estan completades
-     */
-    public function totesObligatoriesCompletades(): bool
+    public function estaCompletada(): bool
     {
-        return $this->tasquesObligatoriesPendents()->count() === 0;
+        return $this->estat === 'completada';
     }
 
-    /**
-     * Obtenir el temps transcorregut des de la creació
-     */
-    public function getDiesTranscorregutsAttribute(): int
+    public function estaEnProgres(): bool
+    {
+        return $this->estat === 'en_progres';
+    }
+
+    public function estaPendent(): bool
+    {
+        return $this->estat === 'pendent';
+    }
+
+    public function getDiesDesdaCreacio(): int
     {
         return $this->created_at->diffInDays(now());
     }
 
-    /**
-     * Obtenir el temps de completació en dies
-     */
-    public function getDiesCompletacioAttribute(): ?int
+    public function getDiesPerCompletar(): ?int
     {
-        if (!$this->data_finalitzacio) {
-            return null;
+        if ($this->estaCompletada()) {
+            return $this->created_at->diffInDays($this->data_finalitzacio);
         }
         
-        return $this->created_at->diffInDays($this->data_finalitzacio);
+        return null;
     }
 
-    /**
-     * Scopes
-     */
-    public function scopePendents($query)
+    public function getTipusTemplate(): string
     {
-        return $query->where('estat', 'pendent');
+        return $this->template->tipus;
     }
 
-    public function scopeEnProgres($query)
+    public function esOnboarding(): bool
     {
-        return $query->where('estat', 'en_progres');
+        return $this->getTipusTemplate() === 'onboarding';
     }
 
-    public function scopeCompletades($query)
+    public function esOffboarding(): bool
     {
-        return $query->where('estat', 'completada');
-    }
-
-    public function scopePerTipus($query, $tipus)
-    {
-        return $query->whereHas('template', function ($q) use ($tipus) {
-            $q->where('tipus', $tipus);
-        });
-    }
-
-    public function scopeRecents($query, $dies = 7)
-    {
-        return $query->where('created_at', '>=', now()->subDays($dies));
+        return $this->getTipusTemplate() === 'offboarding';
     }
 }

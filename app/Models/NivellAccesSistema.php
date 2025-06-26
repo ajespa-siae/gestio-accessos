@@ -6,85 +6,61 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class NivellAccesSistema extends Model
 {
     use HasFactory;
 
-    /**
-     * IMPORTANT: El nom de la taula a la BD
-     */
-    protected $table = 'nivells_acces_sistema';
-    
+protected $table = 'nivells_acces_sistema';
+
     protected $fillable = [
         'sistema_id',
         'nom',
         'descripcio',
         'ordre',
-        'actiu',
+        'actiu'
     ];
 
     protected $casts = [
-        'actiu' => 'boolean',
-        'ordre' => 'integer',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'actiu' => 'boolean'
     ];
 
-    /**
-     * Sistema al qual pertany aquest nivell d'accés
-     */
+    // Relacions
     public function sistema(): BelongsTo
     {
         return $this->belongsTo(Sistema::class);
     }
 
-    /**
-     * Sol·licituds que utilitzen aquest nivell d'accés
-     */
-    public function solicituds(): HasMany
+    public function solicitudsSistemes(): HasMany
     {
         return $this->hasMany(SolicitudSistema::class, 'nivell_acces_id');
     }
 
-    /**
-     * Scope per filtrar nivells actius
-     */
-    public function scopeActius($query)
+    // Scopes
+    public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
 
-    /**
-     * Scope per ordenar per ordre
-     */
-    public function scopeOrdenats($query)
+    public function scopeOrdenats(Builder $query): Builder
     {
         return $query->orderBy('ordre');
     }
 
-    /**
-     * Obtenir el nom complet (sistema + nivell)
-     */
-    public function getNomCompletAttribute(): string
+    public function scopePerSistema(Builder $query, int $sistemaId): Builder
     {
-        return $this->sistema->nom . ' - ' . $this->nom;
+        return $query->where('sistema_id', $sistemaId);
     }
 
-    /**
-     * Verificar si és el nivell més bàsic
-     */
-    public function esNivellBasic(): bool
+    // Methods
+    public function getNomComplet(): string
+    {
+        return "{$this->sistema->nom} - {$this->nom}";
+    }
+
+    public function esPrimari(): bool
     {
         return $this->ordre === 1;
-    }
-
-    /**
-     * Verificar si és el nivell més alt
-     */
-    public function esNivellMaxim(): bool
-    {
-        $maxOrdre = $this->sistema->nivellsAcces()->max('ordre');
-        return $this->ordre === $maxOrdre;
     }
 }

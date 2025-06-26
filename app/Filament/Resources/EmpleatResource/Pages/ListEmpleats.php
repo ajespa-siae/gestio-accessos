@@ -17,32 +17,51 @@ class ListEmpleats extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nou Empleat')
-                ->icon('heroicon-o-plus'),
+                ->icon('heroicon-o-plus')
+                ->color('success'),
         ];
     }
-
+    
     public function getTabs(): array
     {
         return [
             'tots' => Tab::make('Tots')
-                ->badge(fn () => $this->getModel()::count()),
+                ->badge($this->getModel()::count()),
                 
             'actius' => Tab::make('Actius')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('estat', 'actiu'))
-                ->badge(fn () => $this->getModel()::where('estat', 'actiu')->count())
+                ->badge($this->getModel()::where('estat', 'actiu')->count())
                 ->badgeColor('success'),
                 
             'baixa' => Tab::make('Baixa')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('estat', 'baixa'))
-                ->badge(fn () => $this->getModel()::where('estat', 'baixa')->count())
+                ->badge($this->getModel()::where('estat', 'baixa')->count())
                 ->badgeColor('danger'),
                 
-            'pendents_checklist' => Tab::make('Amb Checklists Pendents')
+            'onboarding_pendent' => Tab::make('Onboarding Pendent')
                 ->modifyQueryUsing(fn (Builder $query) => 
-                    $query->whereHas('checklists', fn ($q) => $q->where('estat', '!=', 'completada'))
+                    $query->where('estat', 'actiu')
+                          ->whereDoesntHave('checklists', function ($q) {
+                              $q->whereHas('template', function ($t) {
+                                  $t->where('tipus', 'onboarding');
+                              });
+                          })
                 )
-                ->badge(fn () => $this->getModel()::whereHas('checklists', fn ($q) => $q->where('estat', '!=', 'completada'))->count())
+                ->badge($this->getModel()::where('estat', 'actiu')
+                    ->whereDoesntHave('checklists', function ($q) {
+                        $q->whereHas('template', function ($t) {
+                            $t->where('tipus', 'onboarding');
+                        });
+                    })->count())
                 ->badgeColor('warning'),
+                
+            'sense_solicituds' => Tab::make('Sense Sol·licituds')
+                ->modifyQueryUsing(fn (Builder $query) => 
+                    $query->where('estat', 'actiu')->doesntHave('solicitudsAcces')
+                )
+                ->badge($this->getModel()::where('estat', 'actiu')
+                    ->doesntHave('solicitudsAcces')->count())
+                ->badgeColor('info'),
         ];
     }
 }

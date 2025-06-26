@@ -6,156 +6,95 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Sistema extends Model
 {
     use HasFactory;
 
     protected $table = 'sistemes';
-    
+
     protected $fillable = [
         'nom',
         'descripcio',
-        'actiu',
-        'configuracio_validadors',
+        'actiu'
     ];
 
     protected $casts = [
-        'actiu' => 'boolean',
-        'configuracio_validadors' => 'string', // CANVIAT de 'array' a 'string'
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'actiu' => 'boolean'
     ];
-    
-    /**
-     * The attributes that should be hidden for arrays.
-     * Això evita problemes amb DISTINCT en PostgreSQL
-     */
-    protected $hidden = ['configuracio_validadors'];
-    
-    /**
-     * Sobreescribimos el método newEloquentBuilder para interceptar todas las consultas
-     * Esta solución es más efectiva que newQuery para evitar problemas con DISTINCT en JSON
-     */
-    public function newEloquentBuilder($query)
-    {
-        // Usar nuestra clase personalizada PostgreSafeBuilder para evitar problemas de cardinalidad
-        return new \App\Database\PostgreSafeBuilder($query);
-    }
 
-    /**
-     * Departaments que tenen accés al sistema
-     */
-    public function departaments(): BelongsToMany
-    {
-        return $this->belongsToMany(Departament::class, 'departament_sistemes')
-            ->withTimestamps();
-    }
-
-    /**
-     * Nivells d'accés del sistema
-     */
+    // Relacions
     public function nivellsAcces(): HasMany
     {
         return $this->hasMany(NivellAccesSistema::class)->orderBy('ordre');
     }
 
-    /**
-     * Sol·licituds del sistema
-     */
-    public function solicituds(): HasMany
+    public function validadors(): BelongsToMany
     {
-        return $this->hasMany(SolicitudSistema::class);
+        return $this->belongsToMany(User::class, 'sistema_validadors', 'sistema_id', 'validador_id')
+                    ->withPivot(['ordre', 'requerit', 'actiu'])
+                    ->withTimestamps();
     }
 
-    /**
-     * Validacions del sistema
-     */
-    public function validacions(): HasMany
+    public function departaments(): BelongsToMany
     {
-        return $this->hasMany(Validacio::class);
+        return $this->belongsToMany(Departament::class, 'departament_sistemes')
+                    ->withPivot(['acces_per_defecte'])
+                    ->withTimestamps();
     }
 
-    /**
-     * Scope per filtrar sistemes actius
-     */
-    public function scopeActius($query)
+    // Scopes
+    public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
 
-    /**
-     * Afegir un nivell d'accés al sistema
-     */
-    public function afegirNivellAcces(string $nom, string $descripcio = null, int $ordre = null): NivellAccesSistema
+    // Methods per validadors (CORREGIDOS)
+    public function afegirValidador(User $validador, int $ordre = 1, bool $requerit = true): void
+    {
+        $this->validadors()->attach($validador->id, [
+            'ordre' => $ordre,
+            'requerit' => $requerit,
+            'actiu' => true
+        ]);
+    }
+
+    public function actualitzarValidador(User $validador, ?int $ordre = null, ?bool $requerit = null, ?bool $actiu = null): void
+    {
+        $dades = [];
+        if ($ordre !== null) $dades['ordre'] = $ordre;
+        if ($requerit !== null) $dades['requerit'] = $requerit;
+        if ($actiu !== null) $dades['actiu'] = $actiu;
+
+        if (!empty($dades)) {
+            $this->validadors()->updateExistingPivot($validador->id, $dades);
+        }
+    }
+
+    public function afegirNivellAcces(string $nom, ?string $descripcio = null, ?int $ordre = null): NivellAccesSistema
     {
         if ($ordre === null) {
-            $ordre = $this->nivellsAcces()->max('ordre') + 1 ?? 1;
+            $ordre = $this->nivellsAcces()->max('ordre') + 1;
         }
 
         return $this->nivellsAcces()->create([
             'nom' => $nom,
             'descripcio' => $descripcio,
             'ordre' => $ordre,
-            'actiu' => true,
+            'actiu' => true
         ]);
     }
 
-    /**
-     * Obtenir validadors configurats
-     */
-    public function getValidadors(): array
+    public function getValidadorsOrdenats()
     {
-        return $this->configuracio_validadors ?? [];
+        return $this->validadors()->wherePivot('actiu', true)->orderByPivot('ordre')->get();
     }
 
-    /**
-     * Afegir un validador
-     */
-    public function afegirValidador($validador): void
+    public function afegirADepartament(Departament $departament, bool $accesPerDefecte = false): void
     {
-        $validadors = $this->configuracio_validadors ?? [];
-        
-        if (!in_array($validador, $validadors)) {
-            $validadors[] = $validador;
-            $this->configuracio_validadors = $validadors;
-            $this->save();
-        }
+        $this->departaments()->attach($departament->id, [
+            'acces_per_defecte' => $accesPerDefecte
+        ]);
     }
-
-    /**
-     * Eliminar un validador
-     */
-    public function eliminarValidador($validador): void
-    {
-        $validadors = $this->configuracio_validadors ?? [];
-        $validadors = array_filter($validadors, fn($v) => $v !== $validador);
-        $this->configuracio_validadors = array_values($validadors);
-        $this->save();
-    }
-
-    /**
-     * Verificar si un departament té accés al sistema
-     */
-    public function departamentTeAcces(int $departamentId): bool
-    {
-        return $this->departaments()->where('departament_id', $departamentId)->exists();
-    }
-
-    /**
-     * Obtenir nivells d'accés actius
-     */
-    public function nivellsAccesActius()
-    {
-        return $this->nivellsAcces()->where('actiu', true)->orderBy('ordre');
-    }
-
-    /**
-     * Obtenir el nivell d'accés per defecte (el de menor ordre)
-     */
-    public function nivellAccesPerDefecte()
-    {
-        return $this->nivellsAccesActius()->first();
-    }
-    
 }

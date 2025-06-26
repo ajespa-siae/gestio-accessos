@@ -13,149 +13,119 @@ class Departament extends Model
 {
     use HasFactory;
 
-    protected $table = 'departaments';
-    
     protected $fillable = [
         'nom',
-        'descripcio',
+        'descripcio', 
         'gestor_id',
-        'actiu',
-        'configuracio'
+        'actiu'
     ];
 
     protected $casts = [
-        'actiu' => 'boolean',
-        'configuracio' => 'string', // CANVIAT de 'array' a 'string'
-        'data_creacio' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+        'actiu' => 'boolean'
     ];
-    
-    /**
-     * The attributes that should be hidden for arrays.
-     * Això evita problemes amb DISTINCT en PostgreSQL
-     */
-    protected $hidden = ['configuracio'];
-    
-    /**
-     * The "booted" method of the model.
-     * Interceptamos todas las consultas para evitar problemas con PostgreSQL
-     */
-    protected static function booted()
-    {
-        // Añadimos un scope global para manejar las consultas
-        static::addGlobalScope('fix_postgres_json', function (Builder $builder) {
-            // Solo aplicamos en el panel de administración
-            if (request()->is('admin/*')) {
-                // Siempre usamos withCount para relaciones en lugar de subconsultas
-                $builder->withCount(['empleats', 'sistemes']);
-            }
-        });
-    }
-    
-    /**
-     * Sobreescribimos el método newEloquentBuilder para interceptar todas las consultas
-     * Esta solución es más efectiva que newQuery para evitar problemas con DISTINCT en JSON
-     */
-    public function newEloquentBuilder($query)
-    {
-        // Usar nuestra clase personalizada PostgreSafeBuilder para evitar problemas de cardinalidad
-        return new \App\Database\PostgreSafeBuilder($query);
-    }
 
-    /**
-     * Gestor del departament
-     */
+    // Relacions
     public function gestor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'gestor_id');
     }
 
-    /**
-     * Empleats del departament
-     */
+    public function configuracions(): HasMany
+    {
+        return $this->hasMany(DepartamentConfiguracio::class);
+    }
+
     public function empleats(): HasMany
     {
         return $this->hasMany(Empleat::class);
     }
 
-    /**
-     * Templates de checklist del departament
-     */
+    public function empleatsActius(): HasMany
+    {
+        return $this->hasMany(Empleat::class)->where('estat', 'actiu');
+    }
+
+    public function sistemes(): BelongsToMany
+    {
+        return $this->belongsToMany(Sistema::class, 'departament_sistemes')
+                    ->withPivot(['acces_per_defecte']);
+    }
+
     public function checklistTemplates(): HasMany
     {
         return $this->hasMany(ChecklistTemplate::class);
     }
 
-    /**
-     * Sistemes associats al departament
-     */
-    public function sistemes(): BelongsToMany
+    public function gestorsAddicionals(): BelongsToMany
     {
-        return $this->belongsToMany(Sistema::class, 'departament_sistemes')
-            ->withTimestamps();
+        return $this->belongsToMany(User::class, 'departament_gestors', 'departament_id', 'user_id');
     }
 
-    /**
-     * Scope per filtrar departaments actius
-     */
-    public function scopeActius($query)
+    // Scopes
+    public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
 
-    /**
-     * Scope per filtrar departaments amb gestor
-     */
-    public function scopeAmbGestor($query)
+    public function scopeAmbEmpleats(Builder $query): Builder
     {
-        return $query->whereNotNull('gestor_id');
+        return $query->has('empleats');
     }
 
-    /**
-     * Obtenir el nombre d'empleats actius
-     */
-    public function getEmpleatsActiusCountAttribute(): int
+    // Methods per configuració (SENSE JSON)
+    public function getConfiguracio(string $clau, mixed $default = null): mixed
     {
-        return $this->empleats()->where('estat', 'actiu')->count();
+        $config = $this->configuracions()->where('clau', $clau)->first();
+        return $config ? $config->valor : $default;
+    }
+    
+    public function setConfiguracio(string $clau, mixed $valor, ?string $descripcio = null): void
+    {
+        $this->configuracions()->updateOrCreate(
+            ['clau' => $clau],
+            [
+                'valor' => (string) $valor,
+                'descripcio' => $descripcio
+            ]
+        );
     }
 
-    /**
-     * Obtenir configuració específica
-     */
-    public function getConfig(string $key, $default = null)
+    public function removeConfiguracio(string $clau): bool
     {
-        return data_get($this->configuracio, $key, $default);
+        return $this->configuracions()->where('clau', $clau)->delete() > 0;
     }
 
-    /**
-     * Establir configuració específica
-     */
-    public function setConfig(string $key, $value): void
+    public function hasConfiguracio(string $clau): bool
     {
-        $config = $this->configuracio ?? [];
-        data_set($config, $key, $value);
-        $this->configuracio = $config;
-        $this->save();
+        return $this->configuracions()->where('clau', $clau)->exists();
     }
 
-    public function getConfiguracioArrayAttribute()
+    // Methods per empleats
+    public function totalEmpleats(): int
     {
-        return $this->configuracio ? json_decode($this->configuracio, true) : [];
+        return $this->empleats()->count();
     }
 
-    public function setConfiguracioArrayAttribute($value)
+    public function empleatsActiusCount(): int
     {
-        $this->configuracio = is_array($value) ? json_encode($value) : $value;
+        return $this->empleatsActius()->count();
     }
 
-    public function getConfiguracioValidadorsArrayAttribute()
+    // Methods per sistemes
+    public function afegirSistema(Sistema $sistema, bool $accesPerDefecte = false): void
     {
-        return $this->configuracio_validadors ? json_decode($this->configuracio_validadors, true) : [];
+        $this->sistemes()->attach($sistema->id, [
+            'acces_per_defecte' => $accesPerDefecte
+        ]);
     }
 
-    public function setConfiguracioValidadorsArrayAttribute($value)
+    public function treureSistema(Sistema $sistema): void
     {
-        $this->configuracio_validadors = is_array($value) ? json_encode($value) : $value;
+        $this->sistemes()->detach($sistema->id);
+    }
+
+    public function teSistema(Sistema $sistema): bool
+    {
+        return $this->sistemes()->where('sistema_id', $sistema->id)->exists();
     }
 }

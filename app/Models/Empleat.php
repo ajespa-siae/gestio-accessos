@@ -6,14 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Jobs\CrearChecklistOnboarding;
-use App\Jobs\CrearChecklistOffboarding;
+use App\Traits\Auditable; // Usar el trait que ya tienes implementado
 
 class Empleat extends Model
 {
-    use HasFactory;
-
-    protected $table = 'empleats';
+    use HasFactory, Auditable; // Usar tu trait Auditable en lugar de Spatie
     
     protected $fillable = [
         'nom_complet',
@@ -30,202 +27,141 @@ class Empleat extends Model
     ];
 
     protected $casts = [
-        'data_alta' => 'date',
-        'data_baixa' => 'date',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'data_alta' => 'datetime',
+        'data_baixa' => 'datetime',
     ];
 
-    /**
-     * Boot del model per automatismes
-     */
     protected static function booted()
     {
         static::creating(function ($empleat) {
-            // Generar identificador únic si no existeix
-            if (!$empleat->identificador_unic) {
+            if (empty($empleat->identificador_unic)) {
                 $empleat->identificador_unic = self::generarIdentificadorUnic();
-            }
-            
-            // Establir data d'alta si no s'ha especificat
-            if (!$empleat->data_alta) {
-                $empleat->data_alta = now();
             }
         });
 
         static::created(function ($empleat) {
-            // Disparar job per crear checklist d'onboarding
-            dispatch(new CrearChecklistOnboarding($empleat));
+            // Dispatch del Job d'onboarding automàtic
+            \App\Jobs\CrearChecklistOnboarding::dispatch($empleat);
         });
     }
 
-    /**
-     * Departament de l'empleat
-     */
+    // Relacions
     public function departament(): BelongsTo
     {
         return $this->belongsTo(Departament::class);
     }
 
-    /**
-     * Usuari que va crear l'empleat
-     */
     public function usuariCreador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuari_creador_id');
     }
 
-    /**
-     * Checklists de l'empleat
-     */
     public function checklists(): HasMany
     {
         return $this->hasMany(ChecklistInstance::class);
     }
 
-    /**
-     * Sol·licituds d'accés de l'empleat
-     */
     public function solicitudsAcces(): HasMany
     {
         return $this->hasMany(SolicitudAcces::class, 'empleat_destinatari_id');
     }
 
-    /**
-     * Accessor per saber si l'empleat està actiu
-     */
-    public function getEsActiuAttribute(): bool
-    {
-        return $this->estat === 'actiu';
-    }
-
-    /**
-     * Accessor per obtenir el nom del departament
-     */
-    public function getNomDepartamentAttribute(): ?string
-    {
-        return $this->departament?->nom;
-    }
-
-    /**
-     * Donar de baixa l'empleat
-     */
-    public function donarBaixa(string $observacions = null): void
-    {
-        $this->update([
-            'estat' => 'baixa',
-            'data_baixa' => now(),
-            'observacions' => $observacions,
-        ]);
-
-        // Disparar job per crear checklist d'offboarding
-        dispatch(new CrearChecklistOffboarding($this));
-    }
-
-    /**
-     * Suspendre l'empleat temporalment
-     */
-    public function suspendre(string $observacions = null): void
-    {
-        $this->update([
-            'estat' => 'suspens',
-            'observacions' => $observacions,
-        ]);
-    }
-
-    /**
-     * Reactivar l'empleat
-     */
-    public function reactivar(): void
-    {
-        $this->update([
-            'estat' => 'actiu',
-            'data_baixa' => null,
-        ]);
-    }
-
-    /**
-     * Generar identificador únic
-     */
-    public static function generarIdentificadorUnic(): string
-    {
-        return 'EMP-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -8));
-    }
-
-    /**
-     * Verificar si l'empleat té checklist d'onboarding completada
-     */
-    public function teOnboardingCompletat(): bool
-    {
-        return $this->checklists()
-            ->whereHas('template', function ($query) {
-                $query->where('tipus', 'onboarding');
-            })
-            ->where('estat', 'completada')
-            ->exists();
-    }
-
-    /**
-     * Verificar si l'empleat pot rebre sol·licituds d'accés
-     */
-    public function potRebreSolicitudsAcces(): bool
-    {
-        return $this->estat === 'actiu' && $this->teOnboardingCompletat();
-    }
-
-    /**
-     * Obtenir checklist activa
-     */
-    public function checklistActiva()
-    {
-        return $this->checklists()
-            ->whereIn('estat', ['pendent', 'en_progres'])
-            ->latest()
-            ->first();
-    }
-
-    /**
-     * Scope per filtrar empleats actius
-     */
+    // Scopes
     public function scopeActius($query)
     {
         return $query->where('estat', 'actiu');
     }
 
-    /**
-     * Scope per filtrar per departament
-     */
-    public function scopePerDepartament($query, $departamentId)
-    {
-        return $query->where('departament_id', $departamentId);
-    }
-
-    /**
-     * Scope per filtrar empleats de baixa
-     */
-    public function scopeDeBaixa($query)
+    public function scopeBaixa($query)
     {
         return $query->where('estat', 'baixa');
     }
 
-    /**
-     * Scope per filtrar empleats suspesos
-     */
-    public function scopeSuspesos($query)
+    // Methods
+    public function donarBaixa(string $observacions = null): void
     {
-        return $query->where('estat', 'suspens');
+        $this->update([
+            'estat' => 'baixa',
+            'data_baixa' => now(),
+            'observacions' => $observacions
+        ]);
+
+        // Dispatch Job d'offboarding
+        \App\Jobs\CrearChecklistOffboarding::dispatch($this);
     }
 
-    /**
-     * Scope per buscar per text
-     */
-    public function scopeCerca($query, $text)
+    public function reactivar(): void
     {
-        return $query->where(function ($q) use ($text) {
-            $q->where('nom_complet', 'like', "%{$text}%")
-              ->orWhere('nif', 'like', "%{$text}%")
-              ->orWhere('correu_personal', 'like', "%{$text}%")
-              ->orWhere('identificador_unic', 'like', "%{$text}%");
-        });
+        $this->update([
+            'estat' => 'actiu',
+            'data_baixa' => null
+        ]);
+    }
+
+    public function teChecklistOnboarding(): bool
+    {
+        return $this->checklists()
+            ->whereHas('template', function ($q) {
+                $q->where('tipus', 'onboarding');
+            })
+            ->exists();
+    }
+
+    public function teChecklistOffboarding(): bool
+    {
+        return $this->checklists()
+            ->whereHas('template', function ($q) {
+                $q->where('tipus', 'offboarding');
+            })
+            ->exists();
+    }
+
+    public function potRebreAccessos(): bool
+    {
+        // Pot rebre accessos si té checklist d'onboarding completada
+        return $this->checklists()
+            ->whereHas('template', function ($q) {
+                $q->where('tipus', 'onboarding');
+            })
+            ->where('estat', 'completada')
+            ->exists();
+    }
+
+    private static function generarIdentificadorUnic(): string
+    {
+        $prefix = 'EMP';
+        $timestamp = now()->format('YmdHis');
+        $random = strtoupper(substr(md5(uniqid()), 0, 8));
+
+        $identificador = "{$prefix}-{$timestamp}-{$random}";
+
+        // Verificar que sigui únic
+        while (self::where('identificador_unic', $identificador)->exists()) {
+            $random = strtoupper(substr(md5(uniqid()), 0, 8));
+            $identificador = "{$prefix}-{$timestamp}-{$random}";
+        }
+
+        return $identificador;
+    }
+
+    // Accessor per mostrar estat formatat
+    public function getEstatFormatatAttribute(): string
+    {
+        return match($this->estat) {
+            'actiu' => 'Actiu',
+            'baixa' => 'Baixa',
+            'suspens' => 'Suspens',
+            default => ucfirst($this->estat)
+        };
+    }
+
+    // Accessor per mostrar temps transcorregut desde l'alta
+    public function getTempsAlServeiAttribute(): string
+    {
+        if ($this->estat === 'baixa' && $this->data_baixa) {
+            return $this->data_alta->diffForHumans($this->data_baixa, true);
+        }
+        
+        return $this->data_alta->diffForHumans(now(), true);
     }
 }

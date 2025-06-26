@@ -8,69 +8,75 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Repeater;
+use Filament\Notifications\Notification;
+use App\Models\SolicitudAcces;
 use App\Models\Sistema;
-use App\Models\NivellAccesSistema;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
+use Filament\Support\Enums\MaxWidth;
 
 class SolicitudsAccesRelationManager extends RelationManager
 {
     protected static string $relationship = 'solicitudsAcces';
-
     protected static ?string $title = 'Sol·licituds d\'Accés';
-
-    protected static ?string $modelLabel = 'Sol·licitud';
-
-    protected static ?string $pluralModelLabel = 'Sol·licituds';
+    protected static ?string $recordTitleAttribute = 'identificador_unic';
 
     public function form(Form $form): Form
     {
         return $form
             ->schema([
-                Textarea::make('justificacio')
-                    ->label('Justificació')
+                Forms\Components\Select::make('usuari_solicitant_id')
+                    ->relationship('usuariSolicitant', 'name')
                     ->required()
-                    ->maxLength(1000)
-                    ->helperText('Indiqueu el motiu pel qual es necessiten aquests accessos')
-                    ->columnSpanFull(),
+                    ->label('Sol·licitant')
+                    ->searchable()
+                    ->preload(),
                     
-                Repeater::make('sistemes_solicitats')
+                Forms\Components\Textarea::make('justificacio')
+                    ->required()
+                    ->label('Justificació')
+                    ->rows(3)
+                    ->placeholder('Motiu de la sol·licitud d\'accés...'),
+                    
+                Forms\Components\Select::make('estat')
+                    ->options([
+                        'pendent' => 'Pendent',
+                        'validant' => 'Validant',
+                        'aprovada' => 'Aprovada',
+                        'rebutjada' => 'Rebutjada',
+                        'finalitzada' => 'Finalitzada',
+                    ])
+                    ->required()
+                    ->label('Estat')
+                    ->disabled(fn (string $context) => $context === 'create'),
+                    
+                // Sistemes sol·licitats (per crear noves sol·licituds)
+                Forms\Components\Repeater::make('sistemes_temporals')
                     ->label('Sistemes Sol·licitats')
                     ->schema([
-                        Select::make('sistema_id')
+                        Forms\Components\Select::make('sistema_id')
                             ->label('Sistema')
                             ->options(Sistema::where('actiu', true)->pluck('nom', 'id'))
                             ->required()
                             ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set) {
-                                $set('nivell_acces_id', null);
-                            }),
+                            ->searchable(),
                             
-                        Select::make('nivell_acces_id')
+                        Forms\Components\Select::make('nivell_acces_id')
                             ->label('Nivell d\'Accés')
-                            ->options(function (callable $get) {
+                            ->options(function (Forms\Get $get) {
                                 $sistemaId = $get('sistema_id');
                                 if (!$sistemaId) return [];
                                 
-                                return NivellAccesSistema::where('sistema_id', $sistemaId)
+                                return Sistema::find($sistemaId)
+                                    ?->nivellsAcces()
                                     ->where('actiu', true)
-                                    ->orderBy('ordre')
-                                    ->pluck('nom', 'id');
+                                    ->pluck('nom', 'id') ?? [];
                             })
                             ->required()
-                            ->reactive(),
+                            ->searchable(),
                     ])
-                    ->minItems(1)
-                    ->maxItems(10)
-                    ->collapsible()
+                    ->visible(fn (string $context) => $context === 'create')
                     ->columnSpanFull()
-                    ->addActionLabel('Afegir Sistema'),
+                    ->collapsible(),
             ]);
     }
 
@@ -79,153 +85,168 @@ class SolicitudsAccesRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('identificador_unic')
             ->columns([
-                TextColumn::make('identificador_unic')
-                    ->label('ID Sol·licitud')
+                Tables\Columns\TextColumn::make('usuariSolicitant.name')
+                    ->label('Sol·licitant')
                     ->searchable()
-                    ->copyable()
-                    ->tooltip('Clic per copiar'),
+                    ->sortable()
+                    ->limit(20),
                     
-                BadgeColumn::make('estat')
+                Tables\Columns\BadgeColumn::make('estat')
                     ->label('Estat')
                     ->colors([
-                        'gray' => 'pendent',
-                        'warning' => 'validant',
+                        'warning' => 'pendent',
+                        'info' => 'validant',
                         'success' => 'aprovada',
                         'danger' => 'rebutjada',
-                        'info' => 'finalitzada'
+                        'gray' => 'finalitzada',
                     ])
                     ->icons([
                         'heroicon-o-clock' => 'pendent',
-                        'heroicon-o-exclamation-triangle' => 'validant',
+                        'heroicon-o-cog-6-tooth' => 'validant',
                         'heroicon-o-check-circle' => 'aprovada',
                         'heroicon-o-x-circle' => 'rebutjada',
-                        'heroicon-o-check-badge' => 'finalitzada'
+                        'heroicon-o-check-badge' => 'finalitzada',
                     ]),
                     
-                TextColumn::make('sistemes_resum')
-                    ->label('Sistemes Sol·licitats')
-                    ->getStateUsing(function ($record) {
-                        $sistemes = $record->sistemesSolicitats()->with('sistema')->get();
-                        return $sistemes->pluck('sistema.nom')->take(3)->join(', ') . 
-                               ($sistemes->count() > 3 ? ' i ' . ($sistemes->count() - 3) . ' més' : '');
-                    })
-                    ->limit(50)
-                    ->tooltip(function ($record) {
-                        return $record->sistemesSolicitats()->with(['sistema', 'nivellAcces'])
-                            ->get()
-                            ->map(fn($item) => "{$item->sistema->nom} ({$item->nivellAcces->nom})")
-                            ->join(', ');
-                    }),
-                    
-                TextColumn::make('usuariSolicitant.name')
-                    ->label('Sol·licitant')
-                    ->toggleable(),
-                    
-                TextColumn::make('validacions_pendents')
-                    ->label('Validacions')
-                    ->getStateUsing(function ($record) {
-                        $total = $record->validacions()->count();
-                        $pendents = $record->validacions()->where('estat', 'pendent')->count();
-                        $aprovades = $record->validacions()->where('estat', 'aprovada')->count();
-                        
-                        return "{$aprovades}/{$total}";
-                    })
+                Tables\Columns\TextColumn::make('sistemesSolicitats_count')
+                    ->counts('sistemesSolicitats')
+                    ->label('Sistemes')
                     ->badge()
-                    ->color(function ($record) {
-                        $total = $record->validacions()->count();
-                        $aprovades = $record->validacions()->where('estat', 'aprovada')->count();
-                        
-                        if ($aprovades === $total) return 'success';
-                        if ($aprovades > 0) return 'warning';
-                        return 'gray';
-                    }),
+                    ->color('info'),
                     
-                TextColumn::make('created_at')
+                Tables\Columns\TextColumn::make('created_at')
                     ->label('Sol·licitada')
-                    ->dateTime('d/m/Y H:i')
+                    ->dateTime('d/m/Y')
                     ->sortable(),
                     
-                TextColumn::make('data_finalitzacio')
+                // Columnes ocultes per defecte
+                Tables\Columns\TextColumn::make('identificador_unic')
+                    ->label('ID Sol·licitud')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                Tables\Columns\TextColumn::make('validacions_count')
+                    ->counts('validacions')
+                    ->label('Validacions')
+                    ->badge()
+                    ->color('warning')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                Tables\Columns\TextColumn::make('validacions_aprovades')
+                    ->label('Aprovades')
+                    ->badge()
+                    ->color('success')
+                    ->getStateUsing(fn (SolicitudAcces $record) => 
+                        $record->validacions()->where('estat', 'aprovada')->count()
+                    )
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                Tables\Columns\TextColumn::make('justificacio')
+                    ->label('Justificació')
+                    ->limit(30)
+                    ->tooltip(fn (SolicitudAcces $record) => $record->justificacio)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                Tables\Columns\TextColumn::make('data_finalitzacio')
                     ->label('Finalitzada')
-                    ->dateTime('d/m/Y H:i')
-                    ->placeholder('—')
-                    ->toggleable(),
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->placeholder('Pendent')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('estat')
+                Tables\Filters\SelectFilter::make('estat')
                     ->options([
                         'pendent' => 'Pendent',
-                        'validant' => 'En Validació',
+                        'validant' => 'Validant',
                         'aprovada' => 'Aprovada',
                         'rebutjada' => 'Rebutjada',
-                        'finalitzada' => 'Finalitzada'
+                        'finalitzada' => 'Finalitzada',
                     ]),
+                    
+                Tables\Filters\SelectFilter::make('usuari_solicitant')
+                    ->relationship('usuariSolicitant', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
                     ->label('Nova Sol·licitud')
-                    ->icon('heroicon-o-plus')
-                    ->mutateFormDataUsing(function (array $data): array {
-                        $data['usuari_solicitant_id'] = Auth::id();
-                        $data['estat'] = 'pendent';
+                    ->modalWidth(MaxWidth::Large)
+                    ->mutateFormDataUsing(function (array $data) {
+                        $data['empleat_destinatari_id'] = $this->ownerRecord->id;
                         return $data;
                     })
-                    ->using(function (array $data, string $model) {
-                        // Crear la sol·licitud
-                        $solicitud = $model::create([
-                            'empleat_destinatari_id' => $this->getOwnerRecord()->id,
+                    ->using(function (array $data) {
+                        // Crear la sol·licitud principal
+                        $solicitud = SolicitudAcces::create([
+                            'empleat_destinatari_id' => $data['empleat_destinatari_id'],
                             'usuari_solicitant_id' => $data['usuari_solicitant_id'],
-                            'estat' => $data['estat'],
                             'justificacio' => $data['justificacio'],
+                            'estat' => 'pendent',
+                            'identificador_unic' => 'SOL-' . now()->format('YmdHis') . '-' . strtoupper(substr(md5(uniqid()), 0, 8))
                         ]);
                         
-                        // Crear els sistemes sol·licitats
-                        foreach ($data['sistemes_solicitats'] as $sistema) {
-                            $solicitud->sistemesSolicitats()->create([
-                                'sistema_id' => $sistema['sistema_id'],
-                                'nivell_acces_id' => $sistema['nivell_acces_id'],
-                            ]);
+                        // Crear sistemes sol·licitats
+                        if (isset($data['sistemes_temporals'])) {
+                            foreach ($data['sistemes_temporals'] as $sistema) {
+                                $solicitud->sistemesSolicitats()->create([
+                                    'sistema_id' => $sistema['sistema_id'],
+                                    'nivell_acces_id' => $sistema['nivell_acces_id'],
+                                ]);
+                            }
                         }
                         
+                        // Dispatch Job per crear validacions
+                        \App\Jobs\CrearValidacionsSolicitud::dispatch($solicitud);
+                        
                         return $solicitud;
-                    })
-                    ->successNotificationTitle('Sol·licitud creada correctament'),
+                    }),
             ])
             ->actions([
-                Action::make('veure_detalls')
-                    ->label('Veure Detalls')
-                    ->icon('heroicon-o-eye')
-                    ->color('info')
-                    ->url(fn ($record) => 
-                        route('filament.admin.resources.solicitud-acces.view', $record)
+                Tables\Actions\ViewAction::make()
+                    ->label('Veure'),
+                    
+                Tables\Actions\EditAction::make()
+                    ->label('Editar')
+                    ->disabled(fn (SolicitudAcces $record) => 
+                        in_array($record->estat, ['aprovada', 'rebutjada', 'finalitzada'])
                     ),
                     
                 Action::make('veure_validacions')
                     ->label('Validacions')
                     ->icon('heroicon-o-shield-check')
+                    ->color('info')
+                    ->url(fn (SolicitudAcces $record) => 
+                        route('filament.admin.resources.solicituds-acces.view', $record)
+                    )
+                    ->openUrlInNewTab(),
+                    
+                Action::make('processar_manualment')
+                    ->label('Processar')
+                    ->icon('heroicon-o-cog-6-tooth')
                     ->color('warning')
-                    ->visible(fn ($record) => $record->validacions()->exists())
-                    ->url(fn ($record) => 
-                        route('filament.admin.resources.validacions.index', [
-                            'tableFilters[solicitud_id][value]' => $record->id
-                        ])
-                    ),
-                    
-                Tables\Actions\EditAction::make()
-                    ->visible(fn ($record) => in_array($record->estat, ['pendent', 'validant'])),
-                    
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn ($record) => $record->estat === 'pendent')
-                    ->requiresConfirmation(),
+                    ->visible(fn (SolicitudAcces $record) => $record->estat === 'pendent')
+                    ->requiresConfirmation()
+                    ->modalHeading('Processar Sol·licitud Manualment')
+                    ->modalDescription('Aquesta acció crearà les validacions necessàries per aquesta sol·licitud.')
+                    ->action(function (SolicitudAcces $record) {
+                        \App\Jobs\CrearValidacionsSolicitud::dispatch($record);
+                        
+                        Notification::make()
+                            ->title('Sol·licitud processada')
+                            ->body('S\'han creat les validacions necessàries.')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->requiresConfirmation(),
+                        ->visible(fn () => auth()->user()->rol_principal === 'admin'),
                 ]),
             ])
-            ->defaultSort('created_at', 'desc')
-            ->striped()
-            ->paginated([10, 25, 50]);
+            ->defaultSort('created_at', 'desc');
     }
 }

@@ -3,183 +3,143 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
-        'email',
+        'email', 
         'password',
-        'username',       // LDAP samaccountname
-        'nif',           // LDAP employeeid
-        'rol_principal', // Rol del sistema RRHH
-        'actiu',         // Estado del usuario
+        'username',
+        'nif',
+        'rol_principal',
+        'actiu',
+        'email_verified_at'
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'actiu' => 'boolean',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'actiu' => 'boolean'
     ];
 
-    /**
-     * Empleats creats per aquest usuari
-     */
+    // Relacions
+    public function departamentsGestionats(): BelongsToMany
+    {
+        return $this->belongsToMany(Departament::class, 'departament_gestors', 'user_id', 'departament_id');
+    }
+
     public function empleatsCreats(): HasMany
     {
         return $this->hasMany(Empleat::class, 'usuari_creador_id');
     }
 
-    /**
-     * Departaments gestionats per aquest usuari
-     */
-    public function departamentsGestionats(): HasMany
-    {
-        return $this->hasMany(Departament::class, 'gestor_id');
-    }
-
-    /**
-     * Tasques de checklist assignades a aquest usuari
-     */
-    public function tasquesAssignades(): HasMany
-    {
-        return $this->hasMany(ChecklistTask::class, 'usuari_assignat_id');
-    }
-
-    /**
-     * Tasques de checklist completades per aquest usuari
-     */
-    public function tasquesCompletades(): HasMany
-    {
-        return $this->hasMany(ChecklistTask::class, 'usuari_completat_id');
-    }
-
-    /**
-     * Sol·licituds d'accés creades per aquest usuari
-     */
     public function solicitudsCreades(): HasMany
     {
         return $this->hasMany(SolicitudAcces::class, 'usuari_solicitant_id');
     }
 
-    /**
-     * Validacions assignades a aquest usuari
-     */
-    public function validacions(): HasMany
+    public function validacionsPendents(): HasMany
     {
-        return $this->hasMany(Validacio::class, 'validador_id');
+        return $this->hasMany(Validacio::class, 'validador_id')->where('estat', 'pendent');
     }
 
-    /**
-     * Logs d'auditoria generats per aquest usuari
-     */
-    public function logsAuditoria(): HasMany
+    public function validacionsRealitzades(): HasMany
     {
-        return $this->hasMany(LogAuditoria::class, 'user_id');
+        return $this->hasMany(Validacio::class, 'validador_id')->whereIn('estat', ['aprovada', 'rebutjada']);
     }
 
-    /**
-     * Notificacions rebudes per aquest usuari
-     */
+    public function checklistTasksAssignades(): HasMany
+    {
+        return $this->hasMany(ChecklistTask::class, 'usuari_assignat_id');
+    }
+
+    public function checklistTasksCompletades(): HasMany
+    {
+        return $this->hasMany(ChecklistTask::class, 'usuari_completat_id');
+    }
+
+    public function sistemesDelsQueEsValidador(): BelongsToMany
+    {
+        return $this->belongsToMany(Sistema::class, 'sistema_validadors', 'validador_id', 'sistema_id')
+                    ->withPivot(['ordre', 'requerit', 'actiu'])
+                    ->wherePivot('actiu', true)
+                    ->orderByPivot('ordre');
+    }
+
     public function notificacions(): HasMany
     {
-        return $this->hasMany(Notificacio::class, 'user_id');
+        return $this->hasMany(Notificacio::class);
     }
 
-    /**
-     * Scope per filtrar usuaris actius
-     */
-    public function scopeActius($query)
+    public function logsAuditoria(): HasMany
+    {
+        return $this->hasMany(LogAuditoria::class);
+    }
+
+    // Scopes
+    public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
 
-    /**
-     * Scope per filtrar per rol
-     */
-    public function scopePerRol($query, $rol)
+    public function scopePerRol(Builder $query, string $rol): Builder
     {
         return $query->where('rol_principal', $rol);
     }
 
-    /**
-     * Accessor per compatibilitat - nom complet
-     */
-    public function getNomCompletAttribute(): string
+    public function scopeBuscar(Builder $query, string $cerca): Builder
     {
-        return $this->name;
+        return $query->where(function($q) use ($cerca) {
+            $q->where('name', 'ilike', "%{$cerca}%")
+              ->orWhere('username', 'ilike', "%{$cerca}%")
+              ->orWhere('email', 'ilike', "%{$cerca}%")
+              ->orWhere('nif', 'ilike', "%{$cerca}%");
+        });
     }
 
-    /**
-     * Verificar si l'usuari té un rol específic
-     */
-    public function teRol(string $rol): bool
+    // Methods
+    public function esGestorDe(Departament $departament): bool
     {
-        return $this->rol_principal === $rol;
+        return $this->departamentsGestionats()->where('departament_id', $departament->id)->exists() ||
+               $departament->gestor_id === $this->id;
     }
 
-    /**
-     * Verificar si l'usuari pot gestionar empleats
-     */
-    public function potGestionarEmpleats(): bool
+    public function potValidarSistema(Sistema $sistema): bool
     {
-        return in_array($this->rol_principal, ['admin', 'rrhh']);
+        return $this->sistemesDelsQueEsValidador()->where('sistema_id', $sistema->id)->exists();
     }
 
-    /**
-     * Verificar si l'usuari és IT
-     */
     public function esIT(): bool
     {
         return $this->rol_principal === 'it';
     }
 
-    /**
-     * Verificar si l'usuari és gestor
-     */
+    public function esRRHH(): bool
+    {
+        return $this->rol_principal === 'rrhh';
+    }
+
     public function esGestor(): bool
     {
         return $this->rol_principal === 'gestor';
     }
 
-    /**
-     * Sincronitzar dades des de LDAP
-     */
-    public function syncFromLdap(array $ldapData): void
+    public function esAdmin(): bool
     {
-        $this->update([
-            'name' => $ldapData['cn'] ?? $this->name,
-            'email' => $ldapData['mail'] ?? $this->email,
-            'username' => $ldapData['samaccountname'] ?? $this->username,
-            'nif' => $ldapData['employeeid'] ?? $this->nif,
-        ]);
+        return $this->rol_principal === 'admin';
     }
 }

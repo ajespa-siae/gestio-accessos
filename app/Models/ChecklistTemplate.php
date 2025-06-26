@@ -6,138 +6,133 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class ChecklistTemplate extends Model
 {
     use HasFactory;
 
-    protected $table = 'checklist_templates';
-    
     protected $fillable = [
         'nom',
         'departament_id',
         'tipus',
-        'actiu',
-        'tasques_template',
+        'actiu'
     ];
 
     protected $casts = [
-        'actiu' => 'boolean',
-        'tasques_template' => 'array',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'actiu' => 'boolean'
     ];
 
-    /**
-     * Departament al qual pertany el template (null = global)
-     */
+    // Relacions
     public function departament(): BelongsTo
     {
         return $this->belongsTo(Departament::class);
     }
 
-    /**
-     * Instàncies creades a partir d'aquest template
-     */
+    public function tasquesTemplate(): HasMany
+    {
+        return $this->hasMany(ChecklistTemplateTasca::class, 'template_id')->orderBy('ordre');
+    }
+
+    public function tasquesTemplateActives(): HasMany
+    {
+        return $this->hasMany(ChecklistTemplateTasca::class, 'template_id')
+                    ->where('activa', true)
+                    ->orderBy('ordre');
+    }
+
     public function instances(): HasMany
     {
         return $this->hasMany(ChecklistInstance::class, 'template_id');
     }
 
-    /**
-     * Scope per filtrar templates actius
-     */
-    public function scopeActius($query)
+    // Scopes
+    public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
 
-    /**
-     * Scope per filtrar per tipus
-     */
-    public function scopePerTipus($query, $tipus)
+    public function scopePerTipus(Builder $query, string $tipus): Builder
     {
         return $query->where('tipus', $tipus);
     }
 
-    /**
-     * Scope per filtrar per departament
-     */
-    public function scopePerDepartament($query, $departamentId)
+    public function scopePerDepartament(Builder $query, int $departamentId): Builder
     {
         return $query->where('departament_id', $departamentId);
     }
 
-    /**
-     * Scope per obtenir templates globals
-     */
-    public function scopeGlobals($query)
+    public function scopeGlobals(Builder $query): Builder
     {
         return $query->whereNull('departament_id');
     }
 
-    /**
-     * Verificar si és un template global
-     */
-    public function esGlobal(): bool
-    {
-        return $this->departament_id === null;
-    }
-
-    /**
-     * Crear una instància del template per un empleat
-     */
+    // Methods per crear instància (SENSE JSON)
     public function crearInstancia(Empleat $empleat): ChecklistInstance
     {
         $instance = $this->instances()->create([
             'empleat_id' => $empleat->id,
-            'estat' => 'pendent',
+            'estat' => 'pendent'
         ]);
 
-        // Crear les tasques des del template
-        foreach ($this->tasques_template as $index => $tasca) {
+        // Crear tasques des de les tasques template
+        foreach ($this->tasquesTemplateActives as $tasca) {
             $instance->tasques()->create([
-                'nom' => $tasca['nom'],
-                'descripcio' => $tasca['descripcio'] ?? '',
-                'ordre' => $index + 1,
-                'obligatoria' => $tasca['obligatoria'] ?? true,
-                'usuari_assignat_id' => $this->trobarUsuariAssignat($tasca['rol_assignat'] ?? 'it'),
-                'data_assignacio' => now(),
+                'nom' => $tasca->nom,
+                'descripcio' => $tasca->descripcio,
+                'ordre' => $tasca->ordre,
+                'obligatoria' => $tasca->obligatoria,
+                'data_limit' => $tasca->dies_limit ? 
+                    now()->addDays($tasca->dies_limit) : null,
+                'usuari_assignat_id' => $this->trobarUsuariAssignat($tasca->rol_assignat, $empleat)
             ]);
         }
 
         return $instance;
     }
 
-    /**
-     * Trobar usuari per assignar segons el rol
-     */
-    private function trobarUsuariAssignat(string $rol): ?int
+    private function trobarUsuariAssignat(string $rol, Empleat $empleat): ?int
     {
+        // Si és gestor, buscar el gestor del departament
+        if ($rol === 'gestor') {
+            return $empleat->departament->gestor_id;
+        }
+
+        // Buscar usuari actiu amb el rol específic
         return User::where('rol_principal', $rol)
-            ->where('actiu', true)
-            ->inRandomOrder()
-            ->first()?->id;
+                   ->where('actiu', true)
+                   ->first()?->id;
     }
 
-    /**
-     * Obtenir el nombre de tasques del template
-     */
-    public function getNombreTasquesAttribute(): int
-    {
-        return count($this->tasques_template ?? []);
-    }
-
-    /**
-     * Clonar template per un altre departament
-     */
-    public function clonarPerDepartament(int $departamentId): self
+    public function duplicar(string $nouNom, ?int $nouDepartamentId = null): self
     {
         $nouTemplate = $this->replicate();
-        $nouTemplate->departament_id = $departamentId;
-        $nouTemplate->nom = $this->nom . ' (Còpia)';
+        $nouTemplate->nom = $nouNom;
+        $nouTemplate->departament_id = $nouDepartamentId;
         $nouTemplate->save();
-        
+    
+        // Duplicar tasques
+        foreach ($this->tasquesTemplate as $tasca) {
+            $novaTasca = $tasca->replicate();
+            $novaTasca->template_id = $nouTemplate->id;
+            $novaTasca->save();
+        }
+    
         return $nouTemplate;
+    }
+
+    public function getTotalTasques(): int
+    {
+        return $this->tasquesTemplate()->count();
+    }
+
+    public function getTasquesObligatories(): int
+    {
+        return $this->tasquesTemplate()->where('obligatoria', true)->count();
+    }
+
+    public function esGlobal(): bool
+    {
+        return $this->departament_id === null;
     }
 }

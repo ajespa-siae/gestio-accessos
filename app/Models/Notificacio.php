@@ -5,13 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class Notificacio extends Model
 {
     use HasFactory;
 
     protected $table = 'notificacions';
-    
+
     protected $fillable = [
         'user_id',
         'titol',
@@ -20,226 +21,130 @@ class Notificacio extends Model
         'llegida',
         'data_llegida',
         'url_accio',
-        'identificador_relacionat',
+        'identificador_relacionat'
     ];
 
     protected $casts = [
         'llegida' => 'boolean',
-        'data_llegida' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'data_llegida' => 'datetime'
     ];
 
-    /**
-     * Usuari destinatari de la notificació
-     */
+    // Relacions
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Marcar com llegida
-     */
-    public function marcarLlegida(): void
+    // Scopes
+    public function scopeNoLlegides(Builder $query): Builder
     {
-        if (!$this->llegida) {
-            $this->update([
-                'llegida' => true,
-                'data_llegida' => now(),
-            ]);
-        }
+        return $query->where('llegida', false);
     }
 
-    /**
-     * Marcar com no llegida
-     */
-    public function marcarNoLlegida(): void
+    public function scopeLlegides(Builder $query): Builder
+    {
+        return $query->where('llegida', true);
+    }
+
+    public function scopePerUsuari(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopePerTipus(Builder $query, string $tipus): Builder
+    {
+        return $query->where('tipus', $tipus);
+    }
+
+    public function scopeRecents(Builder $query, int $dies = 30): Builder
+    {
+        return $query->where('created_at', '>=', now()->subDays($dies));
+    }
+
+    public function scopeOrdenatPerData(Builder $query): Builder
+    {
+        return $query->orderBy('created_at', 'desc');
+    }
+
+    // Methods
+    public function marcarComLlegida(): void
+    {
+        $this->update([
+            'llegida' => true,
+            'data_llegida' => now()
+        ]);
+    }
+
+    public function marcarComNoLlegida(): void
     {
         $this->update([
             'llegida' => false,
-            'data_llegida' => null,
+            'data_llegida' => null
         ]);
     }
 
-    /**
-     * Crear notificació per nou empleat
-     */
-    public static function nouEmpleat(User $user, Empleat $empleat): self
+    public function getTipusFormatted(): string
     {
-        return self::create([
-            'user_id' => $user->id,
-            'titol' => 'Nou empleat creat',
-            'missatge' => "S'ha creat l'empleat {$empleat->nom_complet}",
-            'tipus' => 'info',
-            'url_accio' => "/empleats/{$empleat->id}",
-            'identificador_relacionat' => $empleat->identificador_unic,
-        ]);
+        return match($this->tipus) {
+            'info' => '💡 Informació',
+            'warning' => '⚠️ Avís',
+            'error' => '❌ Error',
+            'success' => '✅ Èxit',
+            default => $this->tipus
+        };
     }
 
-    /**
-     * Crear notificació per nova tasca assignada
-     */
-    public static function novaTasca(User $user, ChecklistTask $tasca): self
-    {
-        return self::create([
-            'user_id' => $user->id,
-            'titol' => 'Nova tasca assignada',
-            'missatge' => "Se t'ha assignat la tasca: {$tasca->nom}",
-            'tipus' => 'warning',
-            'url_accio' => "/checklist/tasks/{$tasca->id}",
-            'identificador_relacionat' => $tasca->checklistInstance->empleat->identificador_unic ?? null,
-        ]);
-    }
-
-    /**
-     * Crear notificació per validació pendent
-     */
-    public static function validacioPendent(User $user, Validacio $validacio): self
-    {
-        $solicitud = $validacio->solicitud;
-        $empleat = $solicitud->empleatDestinatari;
-        
-        return self::create([
-            'user_id' => $user->id,
-            'titol' => 'Validació pendent',
-            'missatge' => "Tens una sol·licitud pendent de validar per {$empleat->nom_complet}",
-            'tipus' => 'warning',
-            'url_accio' => "/validacions/{$validacio->id}",
-            'identificador_relacionat' => $solicitud->identificador_unic,
-        ]);
-    }
-
-    /**
-     * Crear notificació per sol·licitud aprovada
-     */
-    public static function solicitudAprovada(User $user, SolicitudAcces $solicitud): self
-    {
-        return self::create([
-            'user_id' => $user->id,
-            'titol' => 'Sol·licitud aprovada',
-            'missatge' => "La sol·licitud {$solicitud->identificador_unic} ha estat aprovada",
-            'tipus' => 'success',
-            'url_accio' => "/solicituds/{$solicitud->id}",
-            'identificador_relacionat' => $solicitud->identificador_unic,
-        ]);
-    }
-
-    /**
-     * Crear notificació per sol·licitud rebutjada
-     */
-    public static function solicitudRebutjada(User $user, SolicitudAcces $solicitud): self
-    {
-        return self::create([
-            'user_id' => $user->id,
-            'titol' => 'Sol·licitud rebutjada',
-            'missatge' => "La sol·licitud {$solicitud->identificador_unic} ha estat rebutjada",
-            'tipus' => 'error',
-            'url_accio' => "/solicituds/{$solicitud->id}",
-            'identificador_relacionat' => $solicitud->identificador_unic,
-        ]);
-    }
-
-    /**
-     * Obtenir color segons tipus
-     */
-    public function getColorAttribute(): string
+    public function getTipusColor(): string
     {
         return match($this->tipus) {
             'info' => 'blue',
             'warning' => 'yellow',
             'error' => 'red',
             'success' => 'green',
-            default => 'gray',
+            default => 'gray'
         };
     }
 
-    /**
-     * Obtenir icona segons tipus
-     */
-    public function getIconaAttribute(): string
+    public function getTempsTranscorregut(): string
     {
-        return match($this->tipus) {
-            'info' => 'information-circle',
-            'warning' => 'exclamation-triangle',
-            'error' => 'x-circle',
-            'success' => 'check-circle',
-            default => 'bell',
-        };
+        return $this->created_at->diffForHumans();
     }
 
-    /**
-     * Obtenir temps transcorregut
-     */
-    public function getTempsTranscorregutAttribute(): string
+    public function teUrlAccio(): bool
     {
-        $diff = $this->created_at->diffForHumans();
-        return str_replace(['fa ', ' ago'], '', $diff);
+        return !empty($this->url_accio);
     }
 
-    /**
-     * Verificar si és recent (menys de 24h)
-     */
-    public function esRecent(): bool
-    {
-        return $this->created_at->isAfter(now()->subDay());
+    // MÉTODOS CORREGIDOS - Parámetros nullable explícitos
+    public static function crear(
+        int $userId,
+        string $titol,
+        string $missatge,
+        string $tipus = 'info',
+        ?string $urlAccio = null,
+        ?string $identificadorRelacionat = null
+    ): self {
+        return self::create([
+            'user_id' => $userId,
+            'titol' => $titol,
+            'missatge' => $missatge,
+            'tipus' => $tipus,
+            'url_accio' => $urlAccio,
+            'identificador_relacionat' => $identificadorRelacionat,
+            'llegida' => false
+        ]);
     }
 
-    /**
-     * Verificar si és molt antiga (més de 30 dies)
-     */
-    public function esAntiga(): bool
-    {
-        return $this->created_at->isBefore(now()->subDays(30));
-    }
-
-    /**
-     * Scopes
-     */
-    public function scopeNoLlegides($query)
-    {
-        return $query->where('llegida', false);
-    }
-
-    public function scopeLlegides($query)
-    {
-        return $query->where('llegida', true);
-    }
-
-    public function scopePerTipus($query, $tipus)
-    {
-        return $query->where('tipus', $tipus);
-    }
-
-    public function scopeRecents($query, $hores = 24)
-    {
-        return $query->where('created_at', '>=', now()->subHours($hores));
-    }
-
-    public function scopeAntigues($query, $dies = 30)
-    {
-        return $query->where('created_at', '<=', now()->subDays($dies));
-    }
-
-    public function scopeAmbAccio($query)
-    {
-        return $query->whereNotNull('url_accio');
-    }
-
-    public function scopePerIdentificador($query, $identificador)
-    {
-        return $query->where('identificador_relacionat', $identificador);
-    }
-
-    public function scopeOrdenarPerPrioritat($query)
-    {
-        return $query->orderByRaw("
-            CASE 
-                WHEN llegida = false AND tipus = 'error' THEN 1
-                WHEN llegida = false AND tipus = 'warning' THEN 2
-                WHEN llegida = false THEN 3
-                ELSE 4
-            END
-        ")->orderBy('created_at', 'desc');
+    public static function crearPerUsuaris(
+        array $userIds,
+        string $titol,
+        string $missatge,
+        string $tipus = 'info',
+        ?string $urlAccio = null,
+        ?string $identificadorRelacionat = null
+    ): void {
+        foreach ($userIds as $userId) {
+            self::crear($userId, $titol, $missatge, $tipus, $urlAccio, $identificadorRelacionat);
+        }
     }
 }

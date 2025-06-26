@@ -1,5 +1,4 @@
 <?php
-// app/Filament/Resources/EmpleatResource.php
 
 namespace App\Filament\Resources;
 
@@ -13,23 +12,17 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Tables\Actions\Action;
-use Filament\Tables\Actions\ActionGroup;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\Section;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\BulkAction;
+use Filament\Support\Enums\MaxWidth;
+use Filament\Forms\Components\Fieldset;
+use Filament\Forms\Components\Grid;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\Filter;
+use Illuminate\Database\Eloquent\Collection;
 
 class EmpleatResource extends Resource
 {
@@ -37,104 +30,114 @@ class EmpleatResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
     
-    protected static ?string $navigationLabel = 'Empleats';
+    protected static ?string $navigationGroup = 'Gestió RRHH';
     
-    protected static ?string $modelLabel = 'Empleat';
+    protected static ?int $navigationSort = 1;
     
-    protected static ?string $pluralModelLabel = 'Empleats';
-    
-    protected static ?int $navigationSort = 2;
+    protected static ?string $recordTitleAttribute = 'nom_complet';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Section::make('Dades Personals')
+                Fieldset::make('Dades Personals')
                     ->schema([
-                        TextInput::make('nom_complet')
-                            ->required()
-                            ->maxLength(255)
-                            ->label('Nom Complet'),
-                            
-                        TextInput::make('nif')
-                            ->required()
-                            ->unique(ignoreRecord: true)
-                            ->maxLength(20)
-                            ->label('NIF/Employee ID')
-                            ->helperText('Aquest camp s\'utilitzarà per sincronitzar amb LDAP'),
-                            
-                        TextInput::make('correu_personal')
-                            ->email()
-                            ->required()
-                            ->maxLength(255)
-                            ->label('Correu Personal'),
-                    ])
-                    ->columns(2),
-                    
-                Section::make('Dades Laborals')
+                        Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('nom_complet')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->label('Nom Complet')
+                                    ->columnSpanFull(),
+                                
+                                Forms\Components\TextInput::make('nif')
+                                    ->required()
+                                    ->maxLength(20)
+                                    ->label('NIF')
+                                    ->unique(Empleat::class, 'nif', ignoreRecord: true)
+                                    ->validationMessages([
+                                        'unique' => 'Ja existeix un empleat amb aquest NIF.',
+                                    ]),
+                                
+                                Forms\Components\TextInput::make('correu_personal')
+                                    ->email()
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->label('Correu Personal'),
+                            ]),
+                    ]),
+
+                Fieldset::make('Informació Laboral')
                     ->schema([
-                        Select::make('departament_id')
-                            ->label('Departament')
-                            ->options(function() {
-                                return Departament::query()
-                                    ->select(['id', 'nom'])
-                                    ->where('actiu', true)
-                                    ->get()
-                                    ->pluck('nom', 'id')
-                                    ->toArray();
-                            })
-                            ->required()
-                            ->searchable(),
-                            
-                        TextInput::make('carrec')
-                            ->required()
-                            ->maxLength(255)
-                            ->label('Càrrec'),
-                            
-                        Select::make('estat')
-                            ->options([
-                                'actiu' => 'Actiu',
-                                'baixa' => 'Baixa',
-                                'suspens' => 'Suspès'
-                            ])
-                            ->default('actiu')
-                            ->required()
-                            ->disabled(fn ($operation) => $operation === 'create'),
-                            
-                        DatePicker::make('data_alta')
-                            ->default(now())
-                            ->required()
-                            ->label('Data d\'Alta')
-                            ->disabled(fn ($operation) => $operation === 'create'),
-                            
-                        DatePicker::make('data_baixa')
-                            ->label('Data de Baixa')
-                            ->visible(fn ($get) => $get('estat') === 'baixa'),
-                    ])
-                    ->columns(2),
-                    
-                Section::make('Informació Addicional')
+                        Grid::make(2)
+                            ->schema([
+                                Forms\Components\Select::make('departament_id')
+                                    ->relationship('departament', 'nom')
+                                    ->required()
+                                    ->label('Departament')
+                                    ->searchable()
+                                    ->preload()
+                                    ->createOptionForm([
+                                        Forms\Components\TextInput::make('nom')
+                                            ->required()
+                                            ->maxLength(255),
+                                        Forms\Components\Textarea::make('descripcio')
+                                            ->maxLength(500),
+                                    ]),
+                                
+                                Forms\Components\TextInput::make('carrec')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->label('Càrrec'),
+                            ]),
+                    ]),
+
+                Fieldset::make('Estat i Observacions')
                     ->schema([
-                        Textarea::make('observacions')
-                            ->maxLength(1000)
+                        Grid::make(2)
+                            ->schema([
+                                Forms\Components\Select::make('estat')
+                                    ->options([
+                                        'actiu' => 'Actiu',
+                                        'baixa' => 'Baixa',
+                                        'suspens' => 'Suspens',
+                                    ])
+                                    ->default('actiu')
+                                    ->required()
+                                    ->label('Estat')
+                                    ->disabled(fn (string $context) => $context === 'create'),
+                                
+                                Forms\Components\DateTimePicker::make('data_baixa')
+                                    ->label('Data Baixa')
+                                    ->visible(fn (Forms\Get $get) => $get('estat') === 'baixa'),
+                            ]),
+                        
+                        Forms\Components\Textarea::make('observacions')
+                            ->maxLength(65535)
                             ->label('Observacions')
                             ->columnSpanFull(),
-                            
-                        TextInput::make('identificador_unic')
+                    ]),
+
+                // Campos automáticos (solo lectura en edit)
+                Fieldset::make('Informació Sistema')
+                    ->schema([
+                        Forms\Components\TextInput::make('identificador_unic')
                             ->label('Identificador Únic')
                             ->disabled()
-                            ->dehydrated(false)
-                            ->visible(fn ($operation) => $operation === 'edit'),
-                            
-                        Select::make('usuari_creador_id')
-                            ->label('Creat per')
-                            ->options(User::where('actiu', true)->pluck('name', 'id'))
+                            ->dehydrated(false),
+                        
+                        Forms\Components\DateTimePicker::make('data_alta')
+                            ->label('Data Alta')
                             ->disabled()
-                            ->dehydrated(false)
-                            ->visible(fn ($operation) => $operation === 'edit'),
+                            ->dehydrated(false),
+                            
+                        Forms\Components\Select::make('usuari_creador_id')
+                            ->relationship('usuariCreador', 'name')
+                            ->label('Creat per')
+                            ->disabled()
+                            ->dehydrated(false),
                     ])
-                    ->collapsible()
-                    ->collapsed(),
+                    ->visible(fn (string $context) => $context === 'edit'),
             ]);
     }
 
@@ -142,31 +145,24 @@ class EmpleatResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('nom_complet')
+                Tables\Columns\TextColumn::make('nom_complet')
+                    ->label('Nom')
                     ->searchable()
-                    ->label('Nom Complet')
-                    ->sortable(),
-                    
-                TextColumn::make('nif')
-                    ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
+                
+                Tables\Columns\TextColumn::make('nif')
                     ->label('NIF')
-                    ->toggleable(),
-                    
-                TextColumn::make('departament.nom')
                     ->searchable()
-                    ->label('Departament')
                     ->sortable(),
-                    
-                TextColumn::make('carrec')
+                
+                Tables\Columns\TextColumn::make('departament.nom')
+                    ->label('Departament')
+                    ->sortable()
                     ->searchable()
-                    ->label('Càrrec')
-                    ->limit(30)
-                    ->tooltip(function (TextColumn $column): ?string {
-                        $state = $column->getState();
-                        return strlen($state) > 30 ? $state : null;
-                    }),
-                    
-                BadgeColumn::make('estat')
+                    ->limit(20),
+                
+                Tables\Columns\BadgeColumn::make('estat')
                     ->label('Estat')
                     ->colors([
                         'success' => 'actiu',
@@ -178,41 +174,51 @@ class EmpleatResource extends Resource
                         'heroicon-o-x-circle' => 'baixa',
                         'heroicon-o-pause-circle' => 'suspens',
                     ]),
-                    
-                TextColumn::make('checklists_count')
-                    ->counts([
-                        'checklists' => fn (Builder $query) => $query->where('estat', '!=', 'completada')
-                    ])
-                    ->label('Checklists Pendents')
-                    ->badge()
-                    ->color('warning'),
-                    
-                TextColumn::make('solicituds_count')
-                    ->counts([
-                        'solicitudsAcces' => fn (Builder $query) => $query->where('estat', 'pendent')
-                    ])
-                    ->label('Sol·licituds Pendents')
+                
+                Tables\Columns\TextColumn::make('checklists_count')
+                    ->counts('checklists')
+                    ->label('Checklists')
                     ->badge()
                     ->color('info'),
-                    
-                TextColumn::make('usuariCreador.name')
-                    ->label('Creat per')
-                    ->toggleable()
-                    ->toggledHiddenByDefault(),
-                    
-                TextColumn::make('created_at')
-                    ->dateTime('d/m/Y H:i')
-                    ->label('Creat el')
+                
+                // Columnes ocultes per defecte (toggleable)
+                Tables\Columns\TextColumn::make('carrec')
+                    ->label('Càrrec')
+                    ->searchable()
+                    ->limit(25)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                
+                Tables\Columns\TextColumn::make('solicitudsAcces_count')
+                    ->counts('solicitudsAcces')
+                    ->label('Sol·licituds')
+                    ->badge()
+                    ->color('warning')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                
+                Tables\Columns\TextColumn::make('correu_personal')
+                    ->label('Correu')
+                    ->searchable()
+                    ->limit(30)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                
+                Tables\Columns\TextColumn::make('data_alta')
+                    ->label('Data Alta')
+                    ->dateTime('d/m/Y')
                     ->sortable()
-                    ->toggleable()
-                    ->toggledHiddenByDefault(),
+                    ->toggleable(isToggledHiddenByDefault: true),
+                
+                Tables\Columns\TextColumn::make('data_baixa')
+                    ->label('Data Baixa')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('estat')
                     ->options([
                         'actiu' => 'Actiu',
                         'baixa' => 'Baixa',
-                        'suspens' => 'Suspès'
+                        'suspens' => 'Suspens',
                     ])
                     ->default('actiu'),
                     
@@ -220,156 +226,140 @@ class EmpleatResource extends Resource
                     ->relationship('departament', 'nom')
                     ->searchable()
                     ->preload(),
-                    
-                Filter::make('data_alta')
-                    ->form([
-                        DatePicker::make('desde')
-                            ->label('Des de'),
-                        DatePicker::make('fins')
-                            ->label('Fins a'),
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['desde'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('data_alta', '>=', $date),
-                            )
-                            ->when(
-                                $data['fins'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('data_alta', '<=', $date),
-                            );
-                    })
-                    ->indicateUsing(function (array $data): array {
-                        $indicators = [];
-                        
-                        if ($data['desde']) {
-                            $indicators[] = 'Des de: ' . Carbon::parse($data['desde'])->format('d/m/Y');
-                        }
-                        
-                        if ($data['fins']) {
-                            $indicators[] = 'Fins: ' . Carbon::parse($data['fins'])->format('d/m/Y');
-                        }
-                        
-                        return $indicators;
-                    }),
-                    
-                Filter::make('sense_baixa')
-                    ->label('Només actius')
-                    ->query(fn (Builder $query): Builder => $query->where('estat', 'actiu'))
-                    ->default(),
-                    
-                Filter::make('checklists_pendents')
-                    ->label('Amb checklists pendents')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('checklists', fn ($q) => $q->where('estat', '!=', 'completada'))
-                    ),
+                
+                Filter::make('amb_checklists_pendents')
+                    ->label('Amb Checklists Pendents')
+                    ->query(fn (Builder $query) => $query->whereHas('checklists', function ($q) {
+                        $q->where('estat', '!=', 'completada');
+                    })),
+                
+                Filter::make('sense_solicituds')
+                    ->label('Sense Sol·licituds d\'Accés')
+                    ->query(fn (Builder $query) => $query->doesntHave('solicitudsAcces')),
             ])
             ->actions([
-                ActionGroup::make([
-                    //Tables\Actions\ViewAction::make(),
-                    Tables\Actions\EditAction::make(),
-                    
-                    Action::make('donar_baixa')
-                        ->label('Donar de Baixa')
-                        ->icon('heroicon-o-user-minus')
-                        ->color('danger')
-                        ->visible(fn (Empleat $record): bool => $record->estat === 'actiu')
-                        ->requiresConfirmation()
-                        ->modalHeading('Confirmar Baixa d\'Empleat')
-                        ->modalDescription(fn (Empleat $record) => 
-                            "Esteu segur que voleu donar de baixa a {$record->nom_complet}? Això crearà automàticament les tasques d'offboarding."
-                        )
-                        ->form([
-                            Textarea::make('observacions_baixa')
-                                ->label('Observacions de la baixa')
-                                ->required()
-                                ->helperText('Indiqueu el motiu de la baixa i qualsevol informació rellevant.')
-                        ])
-                        ->action(function (Empleat $record, array $data): void {
-                            try {
-                                $record->donarBaixa($data['observacions_baixa']);
-                                
-                                Notification::make()
-                                    ->title('Empleat donat de baixa')
-                                    ->body("S'ha processat la baixa de {$record->nom_complet} i s'han creat les tasques d'offboarding.")
-                                    ->success()
-                                    ->send();
-                                    
-                            } catch (\Exception $e) {
-                                Notification::make()
-                                    ->title('Error en processar la baixa')
-                                    ->body('Hi ha hagut un error processar la baixa: ' . $e->getMessage())
-                                    ->danger()
-                                    ->send();
-                            }
-                        }),
+                Tables\Actions\ViewAction::make()
+                    ->label('Veure'),
+                
+                Tables\Actions\EditAction::make()
+                    ->label('Editar'),
+                
+                // Action personalitzat per Onboarding manual
+                Action::make('iniciar_onboarding')
+                    ->label('Iniciar Onboarding')
+                    ->icon('heroicon-o-play')
+                    ->color('success')
+                    ->visible(fn (Empleat $record) => 
+                        $record->estat === 'actiu' && 
+                        !$record->teChecklistOnboarding()
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading('Iniciar Procés d\'Onboarding')
+                    ->modalDescription('Es crearà una checklist d\'onboarding per aquest empleat i es notificarà a IT.')
+                    ->action(function (Empleat $record) {
+                        // Dispatch del Job que ja tens implementat
+                        \App\Jobs\CrearChecklistOnboarding::dispatch($record);
                         
-                    Action::make('reactivar')
-                        ->label('Reactivar')
-                        ->icon('heroicon-o-user-plus')
-                        ->color('success')
-                        ->visible(fn (Empleat $record): bool => $record->estat === 'baixa')
-                        ->requiresConfirmation()
-                        ->action(function (Empleat $record): void {
-                            $record->update([
-                                'estat' => 'actiu',
-                                'data_baixa' => null
-                            ]);
-                            
-                            Notification::make()
-                                ->title('Empleat reactivat')
-                                ->body("{$record->nom_complet} ha estat reactivat correctament.")
-                                ->success()
-                                ->send();
-                        }),
+                        Notification::make()
+                            ->title('Onboarding iniciat')
+                            ->body("S'ha iniciat el procés d'onboarding per {$record->nom_complet}")
+                            ->success()
+                            ->send();
+                    }),
+                
+                // Action per Offboarding
+                Action::make('iniciar_offboarding')
+                    ->label('Donar de Baixa')
+                    ->icon('heroicon-o-x-mark')
+                    ->color('danger')
+                    ->visible(fn (Empleat $record) => $record->estat === 'actiu')
+                    ->form([
+                        Forms\Components\Textarea::make('observacions_baixa')
+                            ->label('Motiu de la baixa')
+                            ->required()
+                            ->placeholder('Descriure el motiu de la baixa...')
+                            ->rows(3),
                         
-                    Action::make('veure_checklists')
-                        ->label('Veure Checklists')
-                        ->icon('heroicon-o-clipboard-document-list')
-                        ->color('info')
-                        ->url(fn (Empleat $record): string => 
-                            route('filament.admin.resources.checklist-instances.index', [
-                                'tableFilters[empleat_id][value]' => $record->id
-                            ])
-                        )
-                        ->visible(fn (Empleat $record): bool => $record->checklists()->exists()),
+                        Forms\Components\DateTimePicker::make('data_baixa_efectiva')
+                            ->label('Data efectiva de baixa')
+                            ->default(now())
+                            ->required(),
+                    ])
+                    ->modalWidth(MaxWidth::Medium)
+                    ->requiresConfirmation()
+                    ->modalHeading('Confirmar Baixa d\'Empleat')
+                    ->modalDescription('Aquesta acció crearà un procés d\'offboarding i marcarà l\'empleat com a baixa.')
+                    ->action(function (Empleat $record, array $data) {
+                        $record->update([
+                            'estat' => 'baixa',
+                            'data_baixa' => $data['data_baixa_efectiva'],
+                            'observacions' => $data['observacions_baixa']
+                        ]);
                         
-                    Action::make('veure_solicituds')
-                        ->label('Veure Sol·licituds')
-                        ->icon('heroicon-o-key')
-                        ->color('warning')
-                        ->url(fn (Empleat $record): string => 
-                            route('filament.admin.resources.solicitud-acces.index', [
-                                'tableFilters[empleat_destinatari_id][value]' => $record->id
-                            ])
-                        )
-                        ->visible(fn (Empleat $record): bool => $record->solicitudsAcces()->exists()),
-                ])
+                        // Dispatch del Job d'offboarding si l'has implementat
+                        \App\Jobs\CrearChecklistOffboarding::dispatch($record);
+                        
+                        Notification::make()
+                            ->title('Empleat donat de baixa')
+                            ->body("S'ha processat la baixa de {$record->nom_complet}")
+                            ->success()
+                            ->send();
+                    }),
+                
+                // Action per veure auditoria (comentat fins implementar página)
+                // Action::make('veure_auditoria')
+                //     ->label('Auditoria')
+                //     ->icon('heroicon-o-document-text')
+                //     ->color('gray')
+                //     ->url(fn (Empleat $record) => route('filament.admin.pages.auditoria', [
+                //         'identificador' => $record->identificador_unic
+                //     ]))
+                //     ->openUrlInNewTab(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->requiresConfirmation()
-                        ->modalDescription('Atenció: Aquesta acció eliminarà permanentment els registres seleccionats i totes les seves dades relacionades.'),
-                        
-                    Tables\Actions\BulkAction::make('exportar')
+                    // Bulk action per exportar
+                    BulkAction::make('exportar')
                         ->label('Exportar Seleccionats')
                         ->icon('heroicon-o-arrow-down-tray')
-                        ->action(function ($records) {
-                            // TODO: Implementar exportació
+                        ->action(function (Collection $records) {
+                            // Aquí pots implementar exportació Excel/CSV
                             Notification::make()
-                                ->title('Exportació en desenvolupament')
-                                ->body('Aquesta funcionalitat s\'implementarà en la següent fase.')
+                                ->title('Exportació en procés')
+                                ->body('Els empleats seleccionats s\'exportaran en breu')
                                 ->info()
+                                ->send();
+                        }),
+                    
+                    // Bulk action per actualitzar departament
+                    BulkAction::make('canviar_departament')
+                        ->label('Canviar Departament')
+                        ->icon('heroicon-o-building-office')
+                        ->form([
+                            Forms\Components\Select::make('nou_departament_id')
+                                ->label('Nou Departament')
+                                ->options(Departament::where('actiu', true)->pluck('nom', 'id'))
+                                ->required(),
+                        ])
+                        ->action(function (Collection $records, array $data) {
+                            $records->each(function ($empleat) use ($data) {
+                                $empleat->update(['departament_id' => $data['nou_departament_id']]);
+                            });
+                            
+                            Notification::make()
+                                ->title('Departament actualitzat')
+                                ->body('Els empleats seleccionats han canviat de departament')
+                                ->success()
                                 ->send();
                         }),
                 ]),
             ])
-            ->defaultSort('created_at', 'desc')
-            ->striped()
-            ->paginated([10, 25, 50, 100]);
+            ->defaultSort('data_alta', 'desc')
+            ->persistSortInSession()
+            ->persistSearchInSession()
+            ->persistFiltersInSession();
     }
-
+    
     public static function getRelations(): array
     {
         return [
@@ -377,7 +367,7 @@ class EmpleatResource extends Resource
             RelationManagers\SolicitudsAccesRelationManager::class,
         ];
     }
-
+    
     public static function getPages(): array
     {
         return [
@@ -395,29 +385,14 @@ class EmpleatResource extends Resource
     
     public static function getNavigationBadgeColor(): ?string
     {
-        $count = static::getNavigationBadge();
-        
-        if ($count > 100) {
-            return 'success';
-        } elseif ($count > 50) {
-            return 'warning';
-        }
-        
-        return 'primary';
+        return static::getModel()::where('estat', 'actiu')->count() > 0 ? 'success' : 'gray';
     }
-
-    // Scopes per autoritzacions
+    
+    // Query personalitzat per optimitzar carregues
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
-        $user = Auth::user();
-        
-        // Si l'usuari és gestor, només veu empleats dels seus departaments
-        if ($user && $user->rol_principal === 'gestor') {
-            $departamentIds = $user->departamentsGestionats()->pluck('departaments.id');
-            $query->whereIn('departament_id', $departamentIds);
-        }
-        
-        return $query;
+        return parent::getEloquentQuery()
+            ->with(['departament', 'usuariCreador'])
+            ->withCount(['checklists', 'solicitudsAcces']);
     }
 }

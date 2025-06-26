@@ -5,255 +5,142 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Jobs\NotificarValidacioCompletada;
+use Illuminate\Database\Eloquent\Builder;
+use App\Traits\Auditable;
 
 class Validacio extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
-    protected $table = 'validacions';
-    
     protected $fillable = [
         'solicitud_id',
         'sistema_id',
         'validador_id',
         'estat',
         'data_validacio',
-        'observacions',
+        'observacions'
     ];
 
     protected $casts = [
-        'data_validacio' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'data_validacio' => 'datetime'
     ];
 
-    /**
-     * Boot del model per automatismes
-     */
+    // Model Events
     protected static function booted()
     {
         static::updated(function ($validacio) {
-            // Quan canvia l'estat, comprovar l'estat general de la sol·licitud
             if ($validacio->wasChanged('estat') && in_array($validacio->estat, ['aprovada', 'rebutjada'])) {
                 $validacio->solicitud->comprovarEstatValidacions();
-                
-                // Notificar al solicitant
-                dispatch(new NotificarValidacioCompletada($validacio));
             }
         });
     }
 
-    /**
-     * Sol·licitud associada
-     */
+    // Relacions
     public function solicitud(): BelongsTo
     {
         return $this->belongsTo(SolicitudAcces::class, 'solicitud_id');
     }
 
-    /**
-     * Sistema associat (opcional)
-     */
     public function sistema(): BelongsTo
     {
-        return $this->belongsTo(Sistema::class, 'sistema_id');
+        return $this->belongsTo(Sistema::class);
     }
 
-    /**
-     * Usuari validador
-     */
     public function validador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'validador_id');
     }
 
-    /**
-     * Aprovar la validació
-     */
-    public function aprovar(string $observacions = null): void
+    // Scopes
+    public function scopePendents(Builder $query): Builder
+    {
+        return $query->where('estat', 'pendent');
+    }
+
+    public function scopeAprovades(Builder $query): Builder
+    {
+        return $query->where('estat', 'aprovada');
+    }
+
+    public function scopeRebutjades(Builder $query): Builder
+    {
+        return $query->where('estat', 'rebutjada');
+    }
+
+    public function scopePerValidador(Builder $query, int $validadorId): Builder
+    {
+        return $query->where('validador_id', $validadorId);
+    }
+
+    public function scopePerSistema(Builder $query, int $sistemaId): Builder
+    {
+        return $query->where('sistema_id', $sistemaId);
+    }
+
+    public function scopeRecents(Builder $query, int $dies = 30): Builder
+    {
+        return $query->where('created_at', '>=', now()->subDays($dies));
+    }
+
+    // Methods
+    public function aprovar(?string $observacions = null): void
     {
         $this->update([
             'estat' => 'aprovada',
             'data_validacio' => now(),
-            'observacions' => $observacions,
+            'observacions' => $observacions
         ]);
+    
+        dispatch(new \App\Jobs\NotificarValidacioAprovada($this));
     }
 
-    /**
-     * Rebutjar la validació
-     */
     public function rebutjar(string $observacions): void
     {
         $this->update([
             'estat' => 'rebutjada',
             'data_validacio' => now(),
-            'observacions' => $observacions,
+            'observacions' => $observacions
         ]);
+
+        dispatch(new \App\Jobs\NotificarValidacioRebutjada($this));
     }
 
-    /**
-     * Obtenir l'empleat de la sol·licitud
-     */
-    public function getEmpleatAttribute()
-    {
-        return $this->solicitud?->empleatDestinatari;
-    }
-
-    /**
-     * Obtenir el solicitant
-     */
-    public function getSolicitantAttribute()
-    {
-        return $this->solicitud?->usuariSolicitant;
-    }
-
-    /**
-     * Verificar si està pendent
-     */
     public function estaPendent(): bool
     {
         return $this->estat === 'pendent';
     }
 
-    /**
-     * Verificar si està aprovada
-     */
     public function estaAprovada(): bool
     {
         return $this->estat === 'aprovada';
     }
 
-    /**
-     * Verificar si està rebutjada
-     */
     public function estaRebutjada(): bool
     {
         return $this->estat === 'rebutjada';
     }
 
-    /**
-     * Obtenir dies d'espera
-     */
-    public function getDiesEsperaAttribute(): int
+    public function getEstatFormatted(): string
     {
-        if (!$this->estaPendent()) {
-            return 0;
-        }
+        return match($this->estat) {
+            'pendent' => '⏳ Pendent',
+            'aprovada' => '✅ Aprovada',
+            'rebutjada' => '❌ Rebutjada',
+            default => $this->estat
+        };
+    }
 
+    public function getDiesDesdaCreacio(): int
+    {
         return $this->created_at->diffInDays(now());
     }
 
-    /**
-     * Obtenir temps de resolució
-     */
-    public function getDiesResolucioAttribute(): ?int
+    public function getDiesPerValidar(): ?int
     {
         if (!$this->data_validacio) {
             return null;
         }
 
         return $this->created_at->diffInDays($this->data_validacio);
-    }
-
-    /**
-     * Verificar si està vençuda
-     */
-    public function estaVencuda(int $diesLimit = 7): bool
-    {
-        return $this->estaPendent() && $this->dies_espera > $diesLimit;
-    }
-
-    /**
-     * Obtenir descripció del sistema (si aplica)
-     */
-    public function getDescripcioSistemaAttribute(): string
-    {
-        if ($this->sistema) {
-            return $this->sistema->nom;
-        }
-
-        return 'Validació general';
-    }
-
-    /**
-     * Obtenir color segons estat
-     */
-    public function getColorEstatAttribute(): string
-    {
-        return match($this->estat) {
-            'aprovada' => 'success',
-            'rebutjada' => 'danger',
-            'pendent' => 'warning',
-            default => 'secondary',
-        };
-    }
-
-    /**
-     * Obtenir icona segons estat
-     */
-    public function getIconaEstatAttribute(): string
-    {
-        return match($this->estat) {
-            'aprovada' => 'check-circle',
-            'rebutjada' => 'x-circle',
-            'pendent' => 'clock',
-            default => 'question-mark-circle',
-        };
-    }
-
-    /**
-     * Scopes
-     */
-    public function scopePendents($query)
-    {
-        return $query->where('estat', 'pendent');
-    }
-
-    public function scopeAprovades($query)
-    {
-        return $query->where('estat', 'aprovada');
-    }
-
-    public function scopeRebutjades($query)
-    {
-        return $query->where('estat', 'rebutjada');
-    }
-
-    public function scopePerValidador($query, $validadorId)
-    {
-        return $query->where('validador_id', $validadorId);
-    }
-
-    public function scopePerSistema($query, $sistemaId)
-    {
-        return $query->where('sistema_id', $sistemaId);
-    }
-
-    public function scopeCompletades($query)
-    {
-        return $query->whereIn('estat', ['aprovada', 'rebutjada']);
-    }
-
-    public function scopeVencudes($query, $dies = 7)
-    {
-        return $query->pendents()
-            ->where('created_at', '<=', now()->subDays($dies));
-    }
-
-    public function scopeRecents($query, $dies = 7)
-    {
-        return $query->where('created_at', '>=', now()->subDays($dies));
-    }
-
-    public function scopeOrdenarPerPrioritat($query)
-    {
-        return $query->orderByRaw("
-            CASE estat
-                WHEN 'pendent' THEN 1
-                WHEN 'rebutjada' THEN 2
-                WHEN 'aprovada' THEN 3
-            END
-        ")->orderBy('created_at', 'asc');
     }
 }

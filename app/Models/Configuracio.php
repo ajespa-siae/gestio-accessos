@@ -4,215 +4,122 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Database\Eloquent\Builder;
 
 class Configuracio extends Model
 {
     use HasFactory;
 
     protected $table = 'configuracio';
-    
+
     protected $fillable = [
         'clau',
         'valor',
         'descripcio',
-        'data_actualitzacio',
+        'data_actualitzacio'
     ];
 
     protected $casts = [
-        'valor' => 'array',
-        'data_actualitzacio' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'data_actualitzacio' => 'datetime'
     ];
 
-    /**
-     * Boot del model
-     */
+    public $timestamps = false; // Usem data_actualitzacio custom
+
+    // Model Events
     protected static function booted()
     {
-        // Actualitzar data_actualitzacio automàticament
         static::saving(function ($config) {
             $config->data_actualitzacio = now();
         });
+    }
 
-        // Netejar cache quan es modifica
-        static::saved(function ($config) {
-            Cache::forget("config.{$config->clau}");
-            Cache::forget('config.all');
-        });
+    // Scopes
+    public function scopePerClau(Builder $query, string $clau): Builder
+    {
+        return $query->where('clau', $clau);
+    }
 
-        static::deleted(function ($config) {
-            Cache::forget("config.{$config->clau}");
-            Cache::forget('config.all');
+    public function scopeBuscar(Builder $query, string $cerca): Builder
+    {
+        return $query->where(function($q) use ($cerca) {
+            $q->where('clau', 'ilike', "%{$cerca}%")
+              ->orWhere('valor', 'ilike', "%{$cerca}%")
+              ->orWhere('descripcio', 'ilike', "%{$cerca}%");
         });
     }
 
-    /**
-     * Obtenir valor de configuració amb cache
-     */
-    public static function get(string $clau, $default = null)
+    // Methods estàtics per gestió de configuració
+    public static function get(string $clau, mixed $default = null): mixed
     {
-        return Cache::remember("config.{$clau}", 3600, function () use ($clau, $default) {
-            $config = static::where('clau', $clau)->first();
-            return $config ? $config->valor : $default;
-        });
+        $config = self::where('clau', $clau)->first();
+        return $config ? $config->valor : $default;
     }
-
-    /**
-     * Establir valor de configuració
-     */
-    public static function set(string $clau, $valor, string $descripcio = null): void
+    
+    public static function set(string $clau, mixed $valor, ?string $descripcio = null): self
     {
-        static::updateOrCreate(
+        return self::updateOrCreate(
             ['clau' => $clau],
             [
-                'valor' => $valor,
-                'descripcio' => $descripcio,
+                'valor' => (string) $valor,
+                'descripcio' => $descripcio
             ]
         );
     }
 
-    /**
-     * Obtenir múltiples configuracions
-     */
-    public static function getMultiple(array $claus): array
+    public static function has(string $clau): bool
     {
-        $configs = static::whereIn('clau', $claus)->get();
+        return self::where('clau', $clau)->exists();
+    }
+
+    public static function remove(string $clau): bool
+    {
+        return self::where('clau', $clau)->delete() > 0;
+    }
+
+    public static function getBoolean(string $clau, bool $default = false): bool
+    {
+        $valor = self::get($clau, $default);
+        return filter_var($valor, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public static function getInteger(string $clau, int $default = 0): int
+    {
+        return (int) self::get($clau, $default);
+    }
+
+    public static function getArray(string $clau, array $default = []): array
+    {
+        $valor = self::get($clau);
+        if (!$valor) return $default;
         
-        $result = [];
-        foreach ($claus as $clau) {
-            $config = $configs->firstWhere('clau', $clau);
-            $result[$clau] = $config ? $config->valor : null;
-        }
-        
-        return $result;
+        $decoded = json_decode($valor, true);
+        return is_array($decoded) ? $decoded : $default;
     }
 
-    /**
-     * Obtenir totes les configuracions
-     */
-    public static function getAllConfigs(): array
+    public static function setArray(string $clau, array $valor, string $descripcio = null): self
     {
-        return Cache::remember('config.all', 3600, function () {
-            return static::pluck('valor', 'clau')->toArray();
-        });
+        return self::set($clau, json_encode($valor), $descripcio);
     }
 
-    /**
-     * Netejar cache de configuració
-     */
-    public static function clearCache(): void
+    // Methods d'instància
+    public function getValorAsBoolean(): bool
     {
-        Cache::forget('config.all');
-        
-        $configs = parent::all()->pluck('valor', 'clau')->toArray();
-        foreach ($configs as $clau => $valor) {
-            Cache::forget("config.{$clau}");
-        }
+        return filter_var($this->valor, FILTER_VALIDATE_BOOLEAN);
     }
 
-    /**
-     * Obtenir configuració de notificacions
-     */
-    public static function notificacions(): array
+    public function getValorAsInteger(): int
     {
-        return self::get('email_notificacions', [
-            'actiu' => true,
-            'from_address' => config('mail.from.address'),
-            'from_name' => config('mail.from.name'),
-        ]);
+        return (int) $this->valor;
     }
 
-    /**
-     * Obtenir temps d'expiració de validacions
-     */
-    public static function tempsExpiracioValidacio(): int
+    public function getValorAsArray(): array
     {
-        $config = self::get('temps_expiracio_validacio', ['dies' => 7]);
-        return $config['dies'] ?? 7;
+        $decoded = json_decode($this->valor, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
-    /**
-     * Obtenir configuració LDAP sync
-     */
-    public static function ldapSync(): array
+    public function getTempsActualitzacio(): string
     {
-        return self::get('ldap_sync', [
-            'actiu' => true,
-            'interval_hores' => 24,
-            'ultim_sync' => null,
-        ]);
-    }
-
-    /**
-     * Actualitzar últim sync LDAP
-     */
-    public static function actualitzarUltimSyncLdap(): void
-    {
-        $config = self::ldapSync();
-        $config['ultim_sync'] = now()->toIso8601String();
-        self::set('ldap_sync', $config);
-    }
-
-    /**
-     * Verificar si cal fer sync LDAP
-     */
-    public static function calSyncLdap(): bool
-    {
-        $config = self::ldapSync();
-        
-        if (!$config['actiu']) {
-            return false;
-        }
-
-        if (!$config['ultim_sync']) {
-            return true;
-        }
-
-        $ultimSync = \Carbon\Carbon::parse($config['ultim_sync']);
-        $horesPassades = $ultimSync->diffInHours(now());
-        
-        return $horesPassades >= $config['interval_hores'];
-    }
-
-    /**
-     * Obtenir configuració de backup
-     */
-    public static function backup(): array
-    {
-        return self::get('backup', [
-            'actiu' => true,
-            'hora' => '02:00',
-            'dies_retencio' => 30,
-        ]);
-    }
-
-    /**
-     * Obtenir configuració de seguretat
-     */
-    public static function seguretat(): array
-    {
-        return self::get('seguretat', [
-            'intents_login' => 5,
-            'temps_bloqueig' => 15, // minuts
-            'longitud_minima_password' => 8,
-            'requerir_majuscules' => true,
-            'requerir_numeros' => true,
-            'dies_caducitat_password' => 90,
-        ]);
-    }
-
-    /**
-     * Scopes
-     */
-    public function scopeActualitzadesRecentment($query, $dies = 7)
-    {
-        return $query->where('data_actualitzacio', '>=', now()->subDays($dies));
-    }
-
-    public function scopePerCategoria($query, $prefix)
-    {
-        return $query->where('clau', 'like', $prefix . '%');
+        return $this->data_actualitzacio->diffForHumans();
     }
 }
