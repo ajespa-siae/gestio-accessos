@@ -82,7 +82,12 @@ EOL'
       # Ejecutar migraciones si la base de datos está configurada correctamente
       - 'cd {release_directory} && php8.4 artisan migrate --force || echo "Error en migraciones, verificar conexión a base de datos"'
       
-      # Optimizar la aplicación
+      # Limpiar todas las cachés y optimizar la aplicación
+      - 'cd {release_directory} && php8.4 artisan config:clear'
+      - 'cd {release_directory} && php8.4 artisan route:clear'
+      - 'cd {release_directory} && php8.4 artisan view:clear'
+      - 'cd {release_directory} && php8.4 artisan cache:clear'
+      - 'cd {release_directory} && php8.4 artisan optimize:clear'
       - 'cd {release_directory} && php8.4 artisan optimize || echo "Error en optimización, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan queue:restart || echo "Error al reiniciar colas, continuando de todos modos"'
       
