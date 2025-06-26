@@ -9,8 +9,11 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+// ✅ AÑADIDO: Soporte para Filament
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -36,7 +39,21 @@ class User extends Authenticatable
         'actiu' => 'boolean'
     ];
 
-    // Relacions
+    // ✅ AÑADIDO: Método requerido por Filament para APP_ENV=production
+    public function canAccessPanel(Panel $panel): bool
+    {
+        // Verificar que el usuario está activo
+        if (!$this->actiu) {
+            return false;
+        }
+
+        // Verificar roles permitidos para acceder a Filament
+        $rolesPermitidos = ['admin', 'rrhh', 'it'];
+        
+        return in_array($this->rol_principal, $rolesPermitidos);
+    }
+
+    // Relacions (mantienen exactamente igual)
     public function departamentsGestionats(): BelongsToMany
     {
         return $this->belongsToMany(Departament::class, 'departament_gestors', 'user_id', 'departament_id');
@@ -90,7 +107,7 @@ class User extends Authenticatable
         return $this->hasMany(LogAuditoria::class);
     }
 
-    // Scopes
+    // Scopes (mantienen exactamente igual)
     public function scopeActius(Builder $query): Builder
     {
         return $query->where('actiu', true);
@@ -111,7 +128,7 @@ class User extends Authenticatable
         });
     }
 
-    // Methods
+    // Methods (mantienen exactamente igual)
     public function esGestorDe(Departament $departament): bool
     {
         return $this->departamentsGestionats()->where('departament_id', $departament->id)->exists() ||
