@@ -46,12 +46,19 @@ class CreateSistema extends CreateRecord
         if (isset($data['validadors_temporals']) && is_array($data['validadors_temporals'])) {
             foreach ($data['validadors_temporals'] as $validadorData) {
                 if (!empty($validadorData['validador_id'])) {
-                    $sistema->validadors()->attach($validadorData['validador_id'], [
-                        'ordre' => $validadorData['ordre'] ?? 1,
-                        'requerit' => $validadorData['requerit'] ?? true,
-                        'actiu' => $validadorData['actiu'] ?? true,
-                    ]);
-                    $createdItems['validadors']++;
+                    try {
+                        $sistema->validadors()->attach($validadorData['validador_id'], [
+                            'ordre' => $validadorData['ordre'] ?? 1,
+                            'requerit' => $validadorData['requerit'] ?? true,
+                            'actiu' => $validadorData['actiu'] ?? true,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        $createdItems['validadors']++;
+                    } catch (\Exception $e) {
+                        // Log l'error però continua amb la creació
+                        \Log::warning('Error creating validator for sistema: ' . $e->getMessage());
+                    }
                 }
             }
         }

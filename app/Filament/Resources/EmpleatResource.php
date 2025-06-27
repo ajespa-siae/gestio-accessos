@@ -30,7 +30,7 @@ class EmpleatResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
     
-    protected static ?string $navigationGroup = 'Gestió RRHH';
+    protected static ?string $navigationGroup = 'Configuració';
     
     protected static ?int $navigationSort = 1;
     

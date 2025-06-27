@@ -201,13 +201,14 @@ class SistemaResource extends Resource
                     ->badge()
                     ->color('warning'),
                 
+                // Columnes ocultes per defecte
                 Tables\Columns\TextColumn::make('departaments_count')
                     ->counts('departaments')
                     ->label('Departaments')
                     ->badge()
-                    ->color('success'),
+                    ->color('success')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 
-                // Columnes ocultes per defecte
                 Tables\Columns\TextColumn::make('solicituds_totals')
                     ->label('Sol·licituds')
                     ->badge()
@@ -298,7 +299,7 @@ class SistemaResource extends Resource
                 
                 // Action per clonar sistema
                 Action::make('clonar')
-                    ->label('Clonar Sistema')
+                    ->label('Clonar')
                     ->icon('heroicon-o-document-duplicate')
                     ->color('info')
                     ->form([

@@ -47,19 +47,17 @@ class DepartamentsRelationManager extends RelationManager
                     ->sortable()
                     ->weight('bold'),
                     
-                Tables\Columns\TextColumn::make('descripcio')
-                    ->label('Descripció')
-                    ->limit(30)
-                    ->tooltip(fn (Departament $record) => $record->descripcio),
-                    
                 Tables\Columns\TextColumn::make('gestor.name')
                     ->label('Gestor')
                     ->sortable(),
                     
-                Tables\Columns\IconColumn::make('pivot.acces_per_defecte')
+                Tables\Columns\IconColumn::make('acces_per_defecte')
                     ->label('Per Defecte')
                     ->boolean()
-                    ->sortable(),
+                    ->getStateUsing(function (Departament $record) {
+                        $pivot = $record->pivot ?? null;
+                        return $pivot ? $pivot->acces_per_defecte : false;
+                    }),
                     
                 Tables\Columns\IconColumn::make('actiu')
                     ->label('Actiu')
@@ -95,12 +93,17 @@ class DepartamentsRelationManager extends RelationManager
                         0 => 'Inactius',
                     ]),
                     
-                Tables\Filters\SelectFilter::make('pivot.acces_per_defecte')
+                Tables\Filters\SelectFilter::make('acces_per_defecte')
                     ->label('Accés per Defecte')
                     ->options([
                         1 => 'Amb Accés per Defecte',
                         0 => 'Sense Accés per Defecte',
-                    ]),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        if (filled($data['value'])) {
+                            $query->wherePivot('acces_per_defecte', $data['value']);
+                        }
+                    }),
             ])
             ->headerActions([
                 Tables\Actions\AttachAction::make()
@@ -132,24 +135,33 @@ class DepartamentsRelationManager extends RelationManager
             ])
             ->actions([
                 Tables\Actions\DetachAction::make()
-                    ->label('Eliminar Accés'),
+                    ->label('Eliminar'),
                     
                 Tables\Actions\EditAction::make()
-                    ->label('Editar Configuració'),
+                    ->label('Editar'),
                     
                 Action::make('toggle_defecte')
-                    ->label(fn (Departament $record) => 
-                        $record->pivot->acces_per_defecte ? 'Treure per Defecte' : 'Marcar per Defecte'
-                    )
-                    ->icon(fn (Departament $record) => 
-                        $record->pivot->acces_per_defecte ? 'heroicon-o-minus-circle' : 'heroicon-o-plus-circle'
-                    )
-                    ->color(fn (Departament $record) => 
-                        $record->pivot->acces_per_defecte ? 'warning' : 'success'
-                    )
+                    ->label(function (Departament $record) {
+                        $pivot = $record->pivot ?? null;
+                        $esPerDefecte = $pivot ? $pivot->acces_per_defecte : false;
+                        return $esPerDefecte ? 'Treure per Defecte' : 'Marcar per Defecte';
+                    })
+                    ->icon(function (Departament $record) {
+                        $pivot = $record->pivot ?? null;
+                        $esPerDefecte = $pivot ? $pivot->acces_per_defecte : false;
+                        return $esPerDefecte ? 'heroicon-o-minus-circle' : 'heroicon-o-plus-circle';
+                    })
+                    ->color(function (Departament $record) {
+                        $pivot = $record->pivot ?? null;
+                        $esPerDefecte = $pivot ? $pivot->acces_per_defecte : false;
+                        return $esPerDefecte ? 'warning' : 'success';
+                    })
                     ->action(function (Departament $record) {
+                        $pivot = $record->pivot ?? null;
+                        $esPerDefecte = $pivot ? $pivot->acces_per_defecte : false;
+                        
                         $this->ownerRecord->departaments()->updateExistingPivot($record->id, [
-                            'acces_per_defecte' => !$record->pivot->acces_per_defecte
+                            'acces_per_defecte' => !$esPerDefecte
                         ]);
                         
                         Notification::make()
@@ -157,15 +169,6 @@ class DepartamentsRelationManager extends RelationManager
                             ->success()
                             ->send();
                     }),
-                    
-                Action::make('veure_solicituds')
-                    ->label('Sol·licituds')
-                    ->icon('heroicon-o-document-text')
-                    ->color('info')
-                    ->url(fn (Departament $record) => 
-                        // Enllaç a sol·licituds filtrades per departament i sistema
-                        '#'
-                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
