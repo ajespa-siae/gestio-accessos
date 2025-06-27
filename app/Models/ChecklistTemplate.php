@@ -34,20 +34,13 @@ class ChecklistTemplate extends Model
         return $this->hasMany(ChecklistTemplateTasca::class, 'template_id')->orderBy('ordre');
     }
 
-    public function tasquesTemplateActives(): HasMany
-    {
-        return $this->hasMany(ChecklistTemplateTasca::class, 'template_id')
-                    ->where('activa', true)
-                    ->orderBy('ordre');
-    }
-
     public function instances(): HasMany
     {
         return $this->hasMany(ChecklistInstance::class, 'template_id');
     }
 
     // Scopes
-    public function scopeActius(Builder $query): Builder
+    public function scopeActives(Builder $query): Builder
     {
         return $query->where('actiu', true);
     }
@@ -57,9 +50,12 @@ class ChecklistTemplate extends Model
         return $query->where('tipus', $tipus);
     }
 
-    public function scopePerDepartament(Builder $query, int $departamentId): Builder
+    public function scopePerDepartament(Builder $query, ?int $departamentId): Builder
     {
-        return $query->where('departament_id', $departamentId);
+        return $query->where(function ($q) use ($departamentId) {
+            $q->where('departament_id', $departamentId)
+              ->orWhereNull('departament_id');
+        })->orderBy('departament_id', 'desc');
     }
 
     public function scopeGlobals(Builder $query): Builder
@@ -67,7 +63,7 @@ class ChecklistTemplate extends Model
         return $query->whereNull('departament_id');
     }
 
-    // Methods per crear instància (SENSE JSON)
+    // Methods
     public function crearInstancia(Empleat $empleat): ChecklistInstance
     {
         $instance = $this->instances()->create([
@@ -75,8 +71,8 @@ class ChecklistTemplate extends Model
             'estat' => 'pendent'
         ]);
 
-        // Crear tasques des de les tasques template
-        foreach ($this->tasquesTemplateActives as $tasca) {
+        // Crear tasques des de les tasques template actives
+        foreach ($this->tasquesTemplate()->where('activa', true)->get() as $tasca) {
             $instance->tasques()->create([
                 'nom' => $tasca->nom,
                 'descripcio' => $tasca->descripcio,
@@ -84,55 +80,108 @@ class ChecklistTemplate extends Model
                 'obligatoria' => $tasca->obligatoria,
                 'data_limit' => $tasca->dies_limit ? 
                     now()->addDays($tasca->dies_limit) : null,
-                'usuari_assignat_id' => $this->trobarUsuariAssignat($tasca->rol_assignat, $empleat)
+                'usuari_assignat_id' => $this->trobarUsuariAssignat($tasca->rol_assignat, $empleat->departament_id)
             ]);
         }
 
         return $instance;
     }
 
-    private function trobarUsuariAssignat(string $rol, Empleat $empleat): ?int
+    public function duplicar(string $nouNom = null): static
     {
-        // Si és gestor, buscar el gestor del departament
-        if ($rol === 'gestor') {
-            return $empleat->departament->gestor_id;
-        }
+        $nouNom = $nouNom ?: $this->nom . ' (Còpia)';
+        
+        $novaPlantilla = $this->replicate();
+        $novaPlantilla->nom = $nouNom;
+        $novaPlantilla->actiu = false; // Les còpies es creen inactives
+        $novaPlantilla->save();
 
-        // Buscar usuari actiu amb el rol específic
-        return User::where('rol_principal', $rol)
-                   ->where('actiu', true)
-                   ->first()?->id;
-    }
-
-    public function duplicar(string $nouNom, ?int $nouDepartamentId = null): self
-    {
-        $nouTemplate = $this->replicate();
-        $nouTemplate->nom = $nouNom;
-        $nouTemplate->departament_id = $nouDepartamentId;
-        $nouTemplate->save();
-    
-        // Duplicar tasques
+        // Duplicar les tasques
         foreach ($this->tasquesTemplate as $tasca) {
             $novaTasca = $tasca->replicate();
-            $novaTasca->template_id = $nouTemplate->id;
+            $novaTasca->template_id = $novaPlantilla->id;
             $novaTasca->save();
         }
-    
-        return $nouTemplate;
+
+        return $novaPlantilla;
     }
 
-    public function getTotalTasques(): int
+    public function getEstadistiquesUsos(): array
     {
-        return $this->tasquesTemplate()->count();
+        $instances = $this->instances()->get();
+        
+        return [
+            'total_usos' => $instances->count(),
+            'completades' => $instances->where('estat', 'completada')->count(),
+            'en_progres' => $instances->where('estat', 'en_progres')->count(),
+            'pendents' => $instances->where('estat', 'pendent')->count(),
+            'temps_mitja_completacio' => $this->calcularTempsMitjaCompletacio($instances),
+        ];
     }
 
-    public function getTasquesObligatories(): int
+    public function potEsborrar(): bool
     {
-        return $this->tasquesTemplate()->where('obligatoria', true)->count();
+        // No es pot esborrar si té instàncies associades
+        return $this->instances()->count() === 0;
     }
 
-    public function esGlobal(): bool
+    public function activar(): void
     {
-        return $this->departament_id === null;
+        $this->update(['actiu' => true]);
+    }
+
+    public function desactivar(): void
+    {
+        $this->update(['actiu' => false]);
+    }
+
+    // Métodos privados
+    private function trobarUsuariAssignat(string $rol, int $departamentId): ?int
+    {
+        // Prioritza usuaris del mateix departament si en té
+        $user = User::where('rol_principal', $rol)
+                   ->where('actiu', true)
+                   ->whereHas('departamentsGestionats', function ($query) use ($departamentId) {
+                       $query->where('departament_id', $departamentId);
+                   })
+                   ->first();
+
+        // Si no en troba, agafa qualsevol usuari amb aquest rol
+        if (!$user) {
+            $user = User::where('rol_principal', $rol)
+                       ->where('actiu', true)
+                       ->first();
+        }
+
+        return $user?->id;
+    }
+
+    private function calcularTempsMitjaCompletacio($instances): ?float
+    {
+        $completades = $instances->where('estat', 'completada')
+                                ->where('data_finalitzacio', '!=', null);
+
+        if ($completades->isEmpty()) {
+            return null;
+        }
+
+        $dies = $completades->map(function ($instance) {
+            return $instance->created_at->diffInDays($instance->data_finalitzacio);
+        })->average();
+
+        return round($dies, 1);
+    }
+
+    // Boot method per configurar events
+    protected static function booted(): void
+    {
+        static::deleting(function (ChecklistTemplate $template) {
+            if (!$template->potEsborrar()) {
+                throw new \Exception('No es pot esborrar una plantilla amb instàncies associades');
+            }
+            
+            // Esborrar tasques template associades
+            $template->tasquesTemplate()->delete();
+        });
     }
 }
