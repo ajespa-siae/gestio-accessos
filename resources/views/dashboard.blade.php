@@ -67,7 +67,7 @@
                                 <div class="space-y-2">
                                     <div>
                                         <span class="text-gray-500">Rol principal:</span>
-                                        <span class="ml-2 font-medium">{{ ucfirst($user->rol_principal) }}</span>
+                                        <span class="ml-2 font-medium">{{ strtoupper($user->rol_principal) }}</span>
                                     </div>
                                     <div>
                                         <span class="text-gray-500">Estado:</span>

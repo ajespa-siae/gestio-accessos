@@ -1,0 +1,164 @@
+/* Estilos personalizados para el sistema de onboarding */
+
+/* Timeline */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 20px;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 1.5rem;
+    border-left: 2px solid #e9ecef;
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -11px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+    font-size: 0.75rem;
+}
+
+.timeline-content {
+    padding-left: 15px;
+    padding-bottom: 10px;
+}
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+.toast {
+    min-width: 300px;
+}
+
+/* Dashboard widgets */
+.dashboard-widget {
+    transition: transform 0.2s ease;
+}
+
+.dashboard-widget:hover {
+    transform: translateY(-5px);
+}
+
+.widget-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+/* Checklist progress */
+.checklist-progress {
+    margin-bottom: 2rem;
+}
+
+.progress {
+    height: 20px;
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+/* Task status badges */
+.badge-pending {
+    background-color: #ffc107;
+}
+
+.badge-completed {
+    background-color: #28a745;
+}
+
+.badge-delayed {
+    background-color: #dc3545;
+}
+
+.badge-inprogress {
+    background-color: #17a2b8;
+}
+
+/* Form improvements */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Card hover effects */
+.card {
+    transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive tables */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* Observaciones text */
+.observacions-text {
+    white-space: pre-line;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Modal improvements */
+.modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .card-header {
+        background-color: transparent !important;
+        border-bottom: 1px solid #000 !important;
+    }
+}
