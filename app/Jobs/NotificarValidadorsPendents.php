@@ -2,13 +2,15 @@
 
 namespace App\Jobs;
 
-use App\Models\SolicitudAcces;
-use App\Models\Notificacio;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Models\SolicitudAcces;
+use App\Models\Notificacio;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 
 class NotificarValidadorsPendents implements ShouldQueue
@@ -21,37 +23,80 @@ class NotificarValidadorsPendents implements ShouldQueue
 
     public function handle(): void
     {
-        try {
-            $validacionsPendents = $this->solicitud->validacionsPendents;
-
-            if ($validacionsPendents->isEmpty()) {
-                Log::warning("No hi ha validacions pendents per la sol·licitud {$this->solicitud->identificador_unic}");
-                return;
+        Log::info("Notificant validadors per solicitud: {$this->solicitud->identificador_unic}");
+        
+        foreach ($this->solicitud->validacions()->where('estat', 'pendent')->get() as $validacio) {
+            if ($validacio->tipus_validacio === 'individual') {
+                $this->notificarValidadorIndividual($validacio);
+            } elseif ($validacio->tipus_validacio === 'grup') {
+                $this->notificarGrupValidadors($validacio);
             }
-
-            foreach ($validacionsPendents as $validacio) {
-                $validador = $validacio->validador;
-                $sistema = $validacio->sistema;
-                $empleat = $this->solicitud->empleatDestinatari;
-
-                // Crear notificació in-app
-                Notificacio::crear(
-                    $validador->id,
-                    'Nova sol·licitud d\'accés per validar',
-                    "Sistema: {$sistema->nom}\nEmpleat: {$empleat->nom_complet}\nDepartament: {$empleat->departament->nom}",
-                    'warning',
-                    "/admin/validacions/{$validacio->id}",
-                    $this->solicitud->identificador_unic
-                );
-
-                // TODO: Enviar email quan estigui configurat
-            }
-
-            Log::info("Notificacions enviades a {$validacionsPendents->count()} validadors per sol·licitud {$this->solicitud->identificador_unic}");
-
-        } catch (\Exception $e) {
-            Log::error("Error notificant validadors: " . $e->getMessage());
-            throw $e;
         }
+    }
+    
+    private function notificarValidadorIndividual($validacio): void
+    {
+        $validador = $validacio->validador;
+        if (!$validador) {
+            Log::warning("Validador no trobat per validació {$validacio->id}");
+            return;
+        }
+        
+        $this->enviarNotificacio($validador, $validacio, 'individual');
+    }
+    
+    private function notificarGrupValidadors($validacio): void
+    {
+        $gestorsIds = json_decode($validacio->grup_validadors_ids, true);
+        if (!$gestorsIds) {
+            Log::warning("No hi ha gestors configurats per validació grup {$validacio->id}");
+            return;
+        }
+        
+        $gestors = User::whereIn('id', $gestorsIds)->where('actiu', true)->get();
+        
+        foreach ($gestors as $gestor) {
+            $this->enviarNotificacio($gestor, $validacio, 'grup');
+        }
+        
+        Log::info("Notificació enviada a {$gestors->count()} gestors per validació grup {$validacio->id}");
+    }
+    
+    private function enviarNotificacio(User $validador, $validacio, string $tipus): void
+    {
+        $sistema = $validacio->sistema;
+        $empleat = $this->solicitud->empleatDestinatari;
+        
+        // Personalitzar missatge segons tipus
+        if ($tipus === 'grup') {
+            $titol = 'Nova sol·licitud d\'accés per validar (grup)';
+            $missatge = "L'empleat {$empleat->nom_complet} sol·licita accés al sistema {$sistema->nom}. "
+                      . "Qualsevol gestor del vostre departament pot validar aquesta sol·licitud.";
+        } else {
+            $titol = 'Nova sol·licitud d\'accés per validar';
+            $missatge = "L'empleat {$empleat->nom_complet} sol·licita accés al sistema {$sistema->nom}";
+        }
+        
+        // Email (si està configurat)
+        if ($validador->email) {
+            try {
+                // Mail::to($validador->email)->send(new SolicitudPendentMail($this->solicitud, $validacio));
+                Log::info("Email enviat a {$validador->email} per validació de {$sistema->nom}");
+            } catch (\Exception $e) {
+                Log::error("Error enviant email a {$validador->email}: " . $e->getMessage());
+            }
+        }
+        
+        // Notificació in-app
+        Notificacio::create([
+            'user_id' => $validador->id,
+            'titol' => $titol,
+            'missatge' => $missatge,
+            'tipus' => 'warning',
+            'url_accio' => "/validacions/{$validacio->id}",
+            'identificador_relacionat' => $this->solicitud->identificador_unic
+        ]);
+        
+        Log::info("Notificació creada per {$validador->name}");
     }
 }

@@ -30,8 +30,6 @@ class EmpleatResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
     
-    protected static ?string $navigationGroup = 'Configuració';
-    
     protected static ?int $navigationSort = 1;
     
     protected static ?string $recordTitleAttribute = 'nom_complet';
@@ -377,17 +375,7 @@ class EmpleatResource extends Resource
             'edit' => Pages\EditEmpleat::route('/{record}/edit'),
         ];
     }
-    
-    public static function getNavigationBadge(): ?string
-    {
-        return static::getModel()::where('estat', 'actiu')->count();
-    }
-    
-    public static function getNavigationBadgeColor(): ?string
-    {
-        return static::getModel()::where('estat', 'actiu')->count() > 0 ? 'success' : 'gray';
-    }
-    
+      
     // Query personalitzat per optimitzar carregues
     public static function getEloquentQuery(): Builder
     {

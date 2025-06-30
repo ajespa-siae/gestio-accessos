@@ -214,4 +214,285 @@ class SolicitudAcces extends Model
 
         return $this->created_at->diffInDays($this->updated_at);
     }
+ 
+// ================================
+    // METHODS PER VALIDACIONS MÚLTIPLES GESTORS (AFEGIR AL FINAL DEL MODEL)
+    // ================================
+
+    /**
+     * Verificar si un usuari pot validar alguna de les validacions pendents
+     */
+    public function potValidar(User $user): bool
+    {
+        return $this->validacions()
+            ->where('estat', 'pendent')
+            ->get()
+            ->contains(function ($validacio) use ($user) {
+                return $validacio->potValidar($user);
+            });
+    }
+
+    /**
+     * Obtenir validacions pendents per un usuari específic
+     */
+    public function getValidacionsPendentsPerUsuari(User $user)
+    {
+        return $this->validacions()
+            ->where('estat', 'pendent')
+            ->get()
+            ->filter(function ($validacio) use ($user) {
+                return $validacio->potValidar($user);
+            });
+    }
+
+    /**
+     * Obtenir resum de l'estat de validacions (MILLORAT)
+     */
+    public function getResumValidacions(): array
+    {
+        $validacions = $this->validacions;
+        
+        return [
+            'total' => $validacions->count(),
+            'pendents' => $validacions->where('estat', 'pendent')->count(),
+            'aprovades' => $validacions->where('estat', 'aprovada')->count(),
+            'rebutjades' => $validacions->where('estat', 'rebutjada')->count(),
+            'individuals' => $validacions->where('tipus_validacio', 'individual')->count(),
+            'grups' => $validacions->where('tipus_validacio', 'grup')->count(),
+            'percentatge_progrés' => $this->getProgressValidacions()['percentatge'],
+        ];
+    }
+
+    /**
+     * Obtenir totes les validacions amb informació detallada
+     */
+    public function getValidacionsDetallades()
+    {
+        return $this->validacions()
+            ->with([
+                'sistema',
+                'validador',
+                'validatPer',
+                'configValidador.departamentValidador'
+            ])
+            ->orderBy('created_at')
+            ->get()
+            ->map(function ($validacio) {
+                return [
+                    'id' => $validacio->id,
+                    'sistema' => $validacio->sistema->nom,
+                    'tipus' => $validacio->tipus_validacio,
+                    'validadors' => $validacio->getNomValidador(),
+                    'estat' => $validacio->estat,
+                    'validat_per' => $validacio->validatPer?->name ?? $validacio->validador?->name,
+                    'data_validacio' => $validacio->data_validacio,
+                    'observacions' => $validacio->observacions,
+                    'descripcio' => $validacio->getDescripcioValidacio(),
+                    'durada' => $validacio->getDuradaValidacio(),
+                    'icona_estat' => $validacio->icona_estat,
+                    'color_estat' => $validacio->color_estat,
+                ];
+            });
+    }
+
+    /**
+     * Processar validació (aprovar o rebutjar) per un usuari
+     */
+    public function processarValidacio(User $user, int $validacioId, string $accio, string $observacions = null): bool
+    {
+        $validacio = $this->validacions()->find($validacioId);
+        
+        if (!$validacio) {
+            throw new \Exception('Validació no trobada');
+        }
+        
+        if (!$validacio->potValidar($user)) {
+            throw new \Exception('No tens permisos per validar aquesta sol·licitud');
+        }
+        
+        if ($validacio->estat !== 'pendent') {
+            throw new \Exception('Aquesta validació ja ha estat processada');
+        }
+        
+        try {
+            if ($accio === 'aprovar') {
+                $validacio->aprovar($user, $observacions);
+            } elseif ($accio === 'rebutjar') {
+                $validacio->rebutjar($user, $observacions ?: 'Sense observacions');
+            } else {
+                throw new \Exception('Acció no vàlida. Utilitza "aprovar" o "rebutjar"');
+            }
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error processant validació {$validacioId}: {$e->getMessage()}");
+            throw $e;
+        }
+    }
+
+    /**
+     * Comprovar estat validacions (VERSIÓ MILLORADA)
+     */
+    public function comprovarEstatValidacionsMillorat(): void
+    {
+        $totalValidacions = $this->validacions()->count();
+        
+        if ($totalValidacions === 0) {
+            // No hi ha validacions, mantenir estat actual o marcar com pendent
+            if ($this->estat === 'validant') {
+                $this->update(['estat' => 'pendent']);
+            }
+            return;
+        }
+        
+        // Comprovar validacions rebutjades
+        $validacionsRebutjades = $this->validacions()
+            ->where('estat', 'rebutjada')
+            ->count();
+        
+        if ($validacionsRebutjades > 0) {
+            $this->update(['estat' => 'rebutjada']);
+            dispatch(new \App\Jobs\NotificarSolicitudRebutjada($this));
+            return;
+        }
+        
+        // Comprovar validacions aprovades
+        $validacionsAprovades = $this->validacions()
+            ->where('estat', 'aprovada')
+            ->count();
+            
+        $validacionsPendents = $this->validacions()
+            ->where('estat', 'pendent')
+            ->count();
+        
+        if ($validacionsPendents === 0 && $validacionsAprovades === $totalValidacions) {
+            // Totes aprovades
+            $this->update(['estat' => 'aprovada']);
+            // Event automàtic dispararà ProcessarSolicitudAprovada
+        } elseif ($validacionsAprovades > 0) {
+            // Algunes aprovades, algunes pendents
+            $this->update(['estat' => 'validant']);
+        }
+        
+        // Si tot són pendents, mantenir estat actual
+    }
+
+    /**
+     * Obtenir validadors pendents agrupats per tipus
+     */
+    public function getValidadorsPendentsAgrupats(): array
+    {
+        $validacionsPendents = $this->validacions()
+            ->where('estat', 'pendent')
+            ->with(['validador', 'sistema', 'configValidador.departamentValidador'])
+            ->get();
+        
+        $agrupats = [
+            'individuals' => [],
+            'grups' => [],
+        ];
+        
+        foreach ($validacionsPendents as $validacio) {
+            if ($validacio->tipus_validacio === 'individual') {
+                $agrupats['individuals'][] = [
+                    'validacio_id' => $validacio->id,
+                    'sistema' => $validacio->sistema->nom,
+                    'validador' => $validacio->validador->name,
+                    'email' => $validacio->validador->email,
+                ];
+            } else {
+                $gestors = $validacio->getValidadorsGrup();
+                $agrupats['grups'][] = [
+                    'validacio_id' => $validacio->id,
+                    'sistema' => $validacio->sistema->nom,
+                    'departament' => $validacio->configValidador?->departamentValidador?->nom,
+                    'gestors_count' => $gestors->count(),
+                    'gestors' => $gestors->map(function ($gestor) {
+                        return [
+                            'id' => $gestor->id,
+                            'name' => $gestor->name,
+                            'email' => $gestor->email,
+                        ];
+                    })->toArray(),
+                ];
+            }
+        }
+        
+        return $agrupats;
+    }
+
+    /**
+     * Verificar si la sol·licitud pot ser finalitzada
+     */
+    public function potSerFinalitzada(): bool
+    {
+        return $this->estat === 'aprovada' && 
+               $this->sistemesSolicitats()->where('aprovat', false)->count() === 0;
+    }
+
+    /**
+     * Obtenir següent validador que ha de validar (per interfície)
+     */
+    public function getSeguentValidador(): ?array
+    {
+        $validacioPendent = $this->validacions()
+            ->where('estat', 'pendent')
+            ->with(['validador', 'sistema', 'configValidador.departamentValidador'])
+            ->orderBy('created_at')
+            ->first();
+        
+        if (!$validacioPendent) {
+            return null;
+        }
+        
+        if ($validacioPendent->tipus_validacio === 'individual') {
+            return [
+                'tipus' => 'individual',
+                'validador' => $validacioPendent->validador->name,
+                'email' => $validacioPendent->validador->email,
+                'sistema' => $validacioPendent->sistema->nom,
+            ];
+        }
+        
+        $gestors = $validacioPendent->getValidadorsGrup();
+        return [
+            'tipus' => 'grup',
+            'departament' => $validacioPendent->configValidador?->departamentValidador?->nom,
+            'gestors_count' => $gestors->count(),
+            'sistema' => $validacioPendent->sistema->nom,
+            'gestors' => $gestors->pluck('name')->toArray(),
+        ];
+    }
+
+    /**
+     * Estadístiques de temps de validació
+     */
+    public function getEstadistiquesTemps(): array
+    {
+        $validacionsCompletades = $this->validacions()
+            ->whereIn('estat', ['aprovada', 'rebutjada'])
+            ->whereNotNull('data_validacio')
+            ->get();
+        
+        if ($validacionsCompletades->isEmpty()) {
+            return [
+                'temps_mitja_validacio' => null,
+                'validacio_mes_rapida' => null,
+                'validacio_mes_lenta' => null,
+                'total_validacions_completades' => 0,
+            ];
+        }
+        
+        $temps = $validacionsCompletades->map(function ($validacio) {
+            return $validacio->created_at->diffInHours($validacio->data_validacio);
+        });
+        
+        return [
+            'temps_mitja_validacio' => round($temps->avg(), 1),
+            'validacio_mes_rapida' => $temps->min(),
+            'validacio_mes_lenta' => $temps->max(),
+            'total_validacions_completades' => $validacionsCompletades->count(),
+        ];
+    }    
 }

@@ -5,7 +5,6 @@ namespace App\Filament\Resources\SistemaResource\Pages;
 use App\Filament\Resources\SistemaResource;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
-use App\Models\Sistema;
 
 class CreateSistema extends CreateRecord
 {
@@ -13,140 +12,112 @@ class CreateSistema extends CreateRecord
     
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+        return $this->getResource()::getUrl('edit', ['record' => $this->getRecord()]);
+    }
+    
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        // Extraure dades temporals per processar després de crear el sistema
+        $this->nivellsTemporals = $data['nivells_temporals'] ?? [];
+        $this->validadorsTemporals = $data['validadors_temporals'] ?? [];
+        $this->departamentsTemporals = $data['departaments_temporals'] ?? [];
+        
+        // Eliminar camps temporals del sistema principal
+        unset($data['nivells_temporals'], $data['validadors_temporals'], $data['departaments_temporals']);
+        
+        return $data;
     }
     
     protected function afterCreate(): void
     {
         $sistema = $this->getRecord();
-        $data = $this->form->getRawState();
         
-        $createdItems = [
-            'nivells' => 0,
-            'validadors' => 0,
-            'departaments' => 0
-        ];
+        // Crear nivells d'accés
+        $this->crearNivellsAcces($sistema);
         
-        // Crear nivells d'accés si s'han definit
-        if (isset($data['nivells_temporals']) && is_array($data['nivells_temporals'])) {
-            foreach ($data['nivells_temporals'] as $nivellData) {
-                if (!empty($nivellData['nom'])) {
-                    $sistema->nivellsAcces()->create([
-                        'nom' => $nivellData['nom'],
-                        'descripcio' => $nivellData['descripcio'] ?? null,
-                        'ordre' => $nivellData['ordre'] ?? 1,
-                        'actiu' => $nivellData['actiu'] ?? true,
-                    ]);
-                    $createdItems['nivells']++;
-                }
-            }
-        }
+        // Crear validadors mixt
+        $this->crearValidadors($sistema);
         
-        // Crear validadors si s'han definit
-        if (isset($data['validadors_temporals']) && is_array($data['validadors_temporals'])) {
-            foreach ($data['validadors_temporals'] as $validadorData) {
-                if (!empty($validadorData['validador_id'])) {
-                    try {
-                        $sistema->validadors()->attach($validadorData['validador_id'], [
-                            'ordre' => $validadorData['ordre'] ?? 1,
-                            'requerit' => $validadorData['requerit'] ?? true,
-                            'actiu' => $validadorData['actiu'] ?? true,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                        $createdItems['validadors']++;
-                    } catch (\Exception $e) {
-                        // Log l'error però continua amb la creació
-                        \Log::warning('Error creating validator for sistema: ' . $e->getMessage());
-                    }
-                }
-            }
-        }
+        // Assignar departaments
+        $this->assignarDepartaments($sistema);
         
-        // Assignar departaments si s'han seleccionat
-        if (isset($data['departaments_temporals']) && is_array($data['departaments_temporals'])) {
-            foreach ($data['departaments_temporals'] as $departamentId) {
-                $sistema->departaments()->attach($departamentId, [
-                    'acces_per_defecte' => false,
-                ]);
-                $createdItems['departaments']++;
-            }
-        }
-        
-        // Crear notificació amb resum
-        $this->crearNotificacioCreacio($sistema, $createdItems);
-    }
-    
-    private function crearNotificacioCreacio(Sistema $sistema, array $items): void
-    {
-        $resumen = [];
-        
-        if ($items['nivells'] > 0) {
-            $resumen[] = "{$items['nivells']} nivell" . ($items['nivells'] > 1 ? 's' : '') . " d'accés";
-        }
-        
-        if ($items['validadors'] > 0) {
-            $resumen[] = "{$items['validadors']} validador" . ($items['validadors'] > 1 ? 's' : '');
-        }
-        
-        if ($items['departaments'] > 0) {
-            $resumen[] = "{$items['departaments']} departament" . ($items['departaments'] > 1 ? 's' : '');
-        }
-        
-        $bodyText = "Sistema '{$sistema->nom}' creat correctament.";
-        if (!empty($resumen)) {
-            $bodyText .= " S'han configurat: " . implode(', ', $resumen) . ".";
-        }
-        
-        $actions = [
-            \Filament\Notifications\Actions\Action::make('configurar')
-                ->label('Configurar Més')
-                ->url($this->getResource()::getUrl('edit', ['record' => $sistema])),
-        ];
-        
-        // Afegir avisos si falten configuracions
-        $warnings = [];
-        if ($items['nivells'] === 0) {
-            $warnings[] = 'nivells d\'accés';
-        }
-        if ($items['validadors'] === 0) {
-            $warnings[] = 'validadors';
-        }
-        if ($items['departaments'] === 0) {
-            $warnings[] = 'departaments';
-        }
-        
-        if (!empty($warnings)) {
-            $actions[] = \Filament\Notifications\Actions\Action::make('completar')
-                ->label('Completar Configuració')
-                ->url($this->getResource()::getUrl('edit', ['record' => $sistema]));
-        }
-        
+        // Notificació de creació exitosa
         Notification::make()
             ->title('Sistema creat correctament')
-            ->body($bodyText)
+            ->body($this->generarResumCreacio($sistema))
             ->success()
-            ->actions($actions)
             ->persistent()
             ->send();
-            
-        // Notificació d'avís si hi ha configuracions pendents
-        if (!empty($warnings)) {
-            Notification::make()
-                ->title('Configuració pendent')
-                ->body('El sistema necessita configurar: ' . implode(', ', $warnings) . '.')
-                ->warning()
-                ->actions([
-                    \Filament\Notifications\Actions\Action::make('configurar_ara')
-                        ->label('Configurar Ara')
-                        ->url($this->getResource()::getUrl('edit', ['record' => $sistema])),
-                ])
-                ->send();
+    }
+    
+    private function crearNivellsAcces($sistema): void
+    {
+        if (empty($this->nivellsTemporals)) {
+            return;
+        }
+        
+        foreach ($this->nivellsTemporals as $nivellData) {
+            $sistema->nivellsAcces()->create([
+                'nom' => $nivellData['nom'],
+                'descripcio' => $nivellData['descripcio'] ?? null,
+                'ordre' => $nivellData['ordre'] ?? 1,
+                'actiu' => $nivellData['actiu'] ?? true,
+            ]);
         }
     }
     
-    protected function getCreatedNotificationTitle(): ?string
+    private function crearValidadors($sistema): void
     {
-        return null; // Desactivar notificació per defecte
+        if (empty($this->validadorsTemporals)) {
+            return;
+        }
+        
+        foreach ($this->validadorsTemporals as $validadorData) {
+            $sistema->sistemaValidadors()->create([
+                'validador_id' => $validadorData['validador_id'] ?? null,
+                'tipus_validador' => $validadorData['tipus_validador'],
+                'ordre' => $validadorData['ordre'] ?? 1,
+                'requerit' => $validadorData['requerit'] ?? true,
+                'actiu' => $validadorData['actiu'] ?? true,
+            ]);
+        }
     }
+    
+    private function assignarDepartaments($sistema): void
+    {
+        if (empty($this->departamentsTemporals)) {
+            return;
+        }
+        
+        $assignacions = [];
+        foreach ($this->departamentsTemporals as $departamentId) {
+            $assignacions[$departamentId] = ['acces_per_defecte' => false];
+        }
+        
+        $sistema->departaments()->attach($assignacions);
+    }
+    
+    private function generarResumCreacio($sistema): string
+    {
+        $resum = "Sistema '{$sistema->nom}' creat amb:\n";
+        
+        $nivells = count($this->nivellsTemporals);
+        $validadors = count($this->validadorsTemporals);
+        $departaments = count($this->departamentsTemporals);
+        
+        if ($nivells > 0) $resum .= "• {$nivells} nivells d'accés\n";
+        if ($validadors > 0) $resum .= "• {$validadors} validadors configurats\n";
+        if ($departaments > 0) $resum .= "• Assignat a {$departaments} departaments\n";
+        
+        if ($nivells === 0 && $validadors === 0 && $departaments === 0) {
+            $resum .= "\n⚠️ Recorda configurar nivells, validadors i departaments des de les pestanyes corresponents.";
+        }
+        
+        return $resum;
+    }
+    
+    // Propietats per emmagatzemar dades temporals
+    private array $nivellsTemporals = [];
+    private array $validadorsTemporals = [];
+    private array $departamentsTemporals = [];
 }

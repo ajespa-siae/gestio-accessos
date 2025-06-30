@@ -9,26 +9,13 @@ class Group extends Model
     /**
      * The object classes of the LDAP model.
      */
-    protected static array $objectClasses = [
+    public static array $objectClasses = [
         'top',
         'group',
     ];
 
     /**
-     * The LDAP connection to use.
-     */
-    protected ?string $connection = 'default';
-
-    /**
-     * Get members of this group
-     */
-    public function members()
-    {
-        return $this->hasMany(User::class, 'memberof');
-    }
-
-    /**
-     * Get the group name
+     * Get the group name.
      */
     public function getName(): ?string
     {
@@ -36,10 +23,34 @@ class Group extends Model
     }
 
     /**
-     * Get the group description
+     * Get the group description.
      */
     public function getDescription(): ?string
     {
         return $this->getFirstAttribute('description');
+    }
+
+    /**
+     * Get all members of this group.
+     */
+    public function getMembers(): array
+    {
+        return $this->getAttribute('member') ?: [];
+    }
+
+    /**
+     * Check if a user is a member of this group.
+     */
+    public function hasMember(string $userDn): bool
+    {
+        $members = $this->getMembers();
+        
+        foreach ($members as $member) {
+            if (strcasecmp($member, $userDn) === 0) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }

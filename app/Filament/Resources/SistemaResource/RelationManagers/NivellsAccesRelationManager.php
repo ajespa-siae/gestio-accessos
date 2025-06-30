@@ -11,6 +11,8 @@ use Filament\Tables\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\NivellAccesSistema;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteBulkAction;
 
 class NivellsAccesRelationManager extends RelationManager
 {
@@ -104,51 +106,6 @@ class NivellsAccesRelationManager extends RelationManager
                         $data['sistema_id'] = $this->ownerRecord->id;
                         return $data;
                     }),
-                    
-                Action::make('reordenar')
-                    ->label('Reordenar Nivells')
-                    ->icon('heroicon-o-bars-3')
-                    ->color('info')
-                    ->modalHeading('Reordenar Nivells d\'Accés')
-                    ->modalDescription('Ajusta l\'ordre dels nivells d\'accés segons la seva jerarquia.')
-                    ->form([
-                        Forms\Components\Repeater::make('nivells_ordre')
-                            ->label('Ordre dels Nivells')
-                            ->schema([
-                                Forms\Components\TextInput::make('nom')
-                                    ->disabled(),
-                                Forms\Components\TextInput::make('nou_ordre')
-                                    ->numeric()
-                                    ->label('Nou Ordre')
-                                    ->required(),
-                            ])
-                            ->default(fn () => 
-                                $this->ownerRecord->nivellsAcces()
-                                    ->orderBy('ordre')
-                                    ->get()
-                                    ->map(fn ($nivell) => [
-                                        'id' => $nivell->id,
-                                        'nom' => $nivell->nom,
-                                        'nou_ordre' => $nivell->ordre
-                                    ])
-                                    ->toArray()
-                            )
-                            ->reorderable(false)
-                    ])
-                    ->action(function (array $data) {
-                        foreach ($data['nivells_ordre'] as $item) {
-                            if (isset($item['id']) && isset($item['nou_ordre'])) {
-                                NivellAccesSistema::where('id', $item['id'])
-                                    ->update(['ordre' => $item['nou_ordre']]);
-                            }
-                        }
-                        
-                        Notification::make()
-                            ->title('Nivells reordenats')
-                            ->body('L\'ordre dels nivells d\'accés s\'ha actualitzat correctament.')
-                            ->success()
-                            ->send();
-                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
@@ -173,8 +130,30 @@ class NivellsAccesRelationManager extends RelationManager
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    
+                    Tables\Actions\BulkAction::make('activate')
+                        ->label('Activar')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->action(function ($records) {
+                            foreach ($records as $record) {
+                                $record->update(['actiu' => true]);
+                            }
+                        }),
+                    
+                    Tables\Actions\BulkAction::make('deactivate')
+                        ->label('Desactivar')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('warning')
+                        ->action(function ($records) {
+                            foreach ($records as $record) {
+                                $record->update(['actiu' => false]);
+                            }
+                        }),
                 ]),
             ])
-            ->defaultSort('ordre');
+            ->defaultSort('ordre')
+            ->reorderable('ordre')
+            ->paginated(false);
     }
 }

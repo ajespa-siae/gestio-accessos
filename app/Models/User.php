@@ -6,26 +6,26 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use LdapRecord\Laravel\Auth\LdapAuthenticatable;
+use LdapRecord\Laravel\Auth\AuthenticatesWithLdap;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Builder;
-// ✅ AÑADIDO: Soporte para Filament
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements LdapAuthenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, AuthenticatesWithLdap;
 
     protected $fillable = [
         'name',
-        'email', 
+        'email',
         'password',
         'username',
         'nif',
         'rol_principal',
         'actiu',
-        'email_verified_at'
+        'ldap_last_sync',
+        'ldap_sync_errors',
+        'ldap_managed',
+        'ldap_dn',
     ];
 
     protected $hidden = [
@@ -36,127 +36,235 @@ class User extends Authenticatable implements FilamentUser
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'actiu' => 'boolean'
+        'actiu' => 'boolean',
+        'ldap_last_sync' => 'datetime',
+        'ldap_sync_errors' => 'array',
+        'ldap_managed' => 'boolean',
     ];
 
-    // ✅ AÑADIDO: Método requerido por Filament para APP_ENV=production
-    public function canAccessPanel(Panel $panel): bool
-    {
-        // Verificar que el usuario está activo
-        if (!$this->actiu) {
-            return false;
-        }
-
-        // Verificar roles permitidos para acceder a Filament
-        $rolesPermitidos = ['admin', 'rrhh', 'it'];
-        
-        return in_array($this->rol_principal, $rolesPermitidos);
-    }
-
-    // Relacions (mantienen exactamente igual)
+    // ===== RELACIONS EXISTENTS =====
+    
     public function departamentsGestionats(): BelongsToMany
     {
-        return $this->belongsToMany(Departament::class, 'departament_gestors', 'user_id', 'departament_id');
+        return $this->belongsToMany(
+            \App\Models\Departament::class, 
+            'departament_gestors', 
+            'user_id', 
+            'departament_id'
+        )->withPivot('gestor_principal')->withTimestamps();
     }
 
-    public function empleatsCreats(): HasMany
+    // ===== MÈTODES LDAP =====
+
+    /**
+     * Get the name of the unique identifier for the user.
+     */
+    public function getLdapIdentifierName(): string
     {
-        return $this->hasMany(Empleat::class, 'usuari_creador_id');
+        return 'username';
     }
 
-    public function solicitudsCreades(): HasMany
+    /**
+     * Get the name of the unique identifier for the user.
+     */
+    public function getLdapIdentifier()
     {
-        return $this->hasMany(SolicitudAcces::class, 'usuari_solicitant_id');
+        return $this->username;
     }
 
-    public function validacionsPendents(): HasMany
+    /**
+     * Get the LDAP domain for the user.
+     */
+    public function getLdapDomain(): ?string
     {
-        return $this->hasMany(Validacio::class, 'validador_id')->where('estat', 'pendent');
+        return null; // Use default connection
     }
 
-    public function validacionsRealitzades(): HasMany
-    {
-        return $this->hasMany(Validacio::class, 'validador_id')->whereIn('estat', ['aprovada', 'rebutjada']);
-    }
+    // ===== SCOPES EXISTENTS =====
 
-    public function checklistTasksAssignades(): HasMany
-    {
-        return $this->hasMany(ChecklistTask::class, 'usuari_assignat_id');
-    }
-
-    public function checklistTasksCompletades(): HasMany
-    {
-        return $this->hasMany(ChecklistTask::class, 'usuari_completat_id');
-    }
-
-    public function sistemesDelsQueEsValidador(): BelongsToMany
-    {
-        return $this->belongsToMany(Sistema::class, 'sistema_validadors', 'validador_id', 'sistema_id')
-                    ->withPivot(['ordre', 'requerit', 'actiu'])
-                    ->wherePivot('actiu', true)
-                    ->orderByPivot('ordre');
-    }
-
-    public function notificacions(): HasMany
-    {
-        return $this->hasMany(Notificacio::class);
-    }
-
-    public function logsAuditoria(): HasMany
-    {
-        return $this->hasMany(LogAuditoria::class);
-    }
-
-    // Scopes (mantienen exactamente igual)
-    public function scopeActius(Builder $query): Builder
+    public function scopeActius($query)
     {
         return $query->where('actiu', true);
     }
 
-    public function scopePerRol(Builder $query, string $rol): Builder
+    public function scopePerRol($query, string $rol)
     {
         return $query->where('rol_principal', $rol);
     }
 
-    public function scopeBuscar(Builder $query, string $cerca): Builder
+    public function scopeGestors($query)
     {
-        return $query->where(function($q) use ($cerca) {
-            $q->where('name', 'ilike', "%{$cerca}%")
-              ->orWhere('username', 'ilike', "%{$cerca}%")
-              ->orWhere('email', 'ilike', "%{$cerca}%")
-              ->orWhere('nif', 'ilike', "%{$cerca}%");
-        });
+        return $query->where('rol_principal', 'gestor');
     }
 
-    // Methods (mantienen exactamente igual)
-    public function esGestorDe(Departament $departament): bool
+    // ===== MÈTODES D'UTILITAT EXISTENTS =====
+
+    public function podeGestionarDepartament(int $departamentId): bool
     {
-        return $this->departamentsGestionats()->where('departament_id', $departament->id)->exists() ||
-               $departament->gestor_id === $this->id;
+        if ($this->rol_principal === 'admin') {
+            return true;
+        }
+
+        if ($this->rol_principal === 'gestor') {
+            return $this->departamentsGestionats()
+                        ->where('departament_id', $departamentId)
+                        ->exists();
+        }
+
+        return false;
     }
 
-    public function potValidarSistema(Sistema $sistema): bool
+    public function teRol(string $rol): bool
     {
-        return $this->sistemesDelsQueEsValidador()->where('sistema_id', $sistema->id)->exists();
-    }
-
-    public function esIT(): bool
-    {
-        return $this->rol_principal === 'it';
-    }
-
-    public function esRRHH(): bool
-    {
-        return $this->rol_principal === 'rrhh';
-    }
-
-    public function esGestor(): bool
-    {
-        return $this->rol_principal === 'gestor';
+        return $this->rol_principal === $rol;
     }
 
     public function esAdmin(): bool
     {
-        return $this->rol_principal === 'admin';
+        return $this->teRol('admin');
+    }
+
+    public function esRRHH(): bool
+    {
+        return $this->teRol('rrhh');
+    }
+
+    public function esIT(): bool
+    {
+        return $this->teRol('it');
+    }
+
+    public function esGestor(): bool
+    {
+        return $this->teRol('gestor');
+    }
+
+    public function getRolCatalaAttribute(): string
+    {
+        return match($this->rol_principal) {
+            'admin' => 'Administrador',
+            'rrhh' => 'Recursos Humans',
+            'it' => 'Informàtica',
+            'gestor' => 'Gestor',
+            'empleat' => 'Empleat',
+            default => 'Desconegut'
+        };
+    }
+
+    public function getRolColorAttribute(): string
+    {
+        return match($this->rol_principal) {
+            'admin' => 'danger',
+            'rrhh' => 'warning',
+            'it' => 'primary',
+            'gestor' => 'success',
+            'empleat' => 'secondary',
+            default => 'gray'
+        };
+    }
+
+    public function necessitaDepartaments(): bool
+    {
+        return $this->esGestor() && $this->departamentsGestionats()->count() === 0;
+    }
+
+    // ===== MÈTODES LDAP =====
+
+    public function necessitaSincronitzacio(): bool
+    {
+        if (!$this->ldap_managed) {
+            return false;
+        }
+        
+        if (!$this->ldap_last_sync) {
+            return true;
+        }
+        
+        return $this->ldap_last_sync->diffInHours() > 24;
+    }
+
+    public function getTempsDesdeUltimaSincronitzacio(): ?string
+    {
+        if (!$this->ldap_last_sync) {
+            return 'Mai';
+        }
+        
+        return $this->ldap_last_sync->diffForHumans();
+    }
+
+    public function teSincronitzacioErrors(): bool
+    {
+        return !empty($this->ldap_sync_errors);
+    }
+
+    public function marcarSincronitzat(?array $errors = null): void
+    {
+        $this->update([
+            'ldap_last_sync' => now(),
+            'ldap_sync_errors' => $errors
+        ]);
+    }
+
+    public function scopeAmbErrorsSincronitzacio($query)
+    {
+        return $query->whereNotNull('ldap_sync_errors');
+    }
+
+    public function scopeNecessitenSincronitzacio($query)
+    {
+        return $query->where('ldap_managed', true)
+                     ->where(function($q) {
+                         $q->whereNull('ldap_last_sync')
+                           ->orWhere('ldap_last_sync', '<', now()->subHours(24));
+                     });
+    }
+
+    /**
+     * Sync user with LDAP data.
+     */
+    public function syncWithLdap(\App\Ldap\User $ldapUser): bool
+    {
+        try {
+            $syncData = $ldapUser->toSyncArray();
+            
+            // Mantenir dades locals importants
+            $syncData['id'] = $this->id;
+            $syncData['password'] = $this->password; // No sobreescriure password local
+            
+            // Actualitzar només camps sincronitzables
+            $updated = $this->update([
+                'name' => $syncData['name'] ?: $this->name,
+                'email' => $syncData['email'] ?: $this->email,
+                'nif' => $syncData['nif'] ?: $this->nif,
+                'actiu' => $syncData['actiu'],
+                'ldap_dn' => $syncData['ldap_dn'],
+                'ldap_last_sync' => $syncData['ldap_last_sync'],
+                'ldap_sync_errors' => null,
+            ]);
+
+            // Actualitzar rol només si és empleat (no sobreescriure rols assignats manualment)
+            if ($this->rol_principal === 'empleat' || $this->rol_principal === null) {
+                $ldapRole = $syncData['rol_principal'];
+                if ($ldapRole && $ldapRole !== 'empleat') {
+                    $this->update(['rol_principal' => $ldapRole]);
+                }
+            }
+
+            return $updated;
+        } catch (\Exception $e) {
+            \Log::error('Error syncing user with LDAP: ' . $e->getMessage(), [
+                'user_id' => $this->id,
+                'username' => $this->username
+            ]);
+            
+            $this->update([
+                'ldap_sync_errors' => [
+                    'error' => $e->getMessage(),
+                    'timestamp' => now()->toISOString()
+                ]
+            ]);
+            
+            return false;
+        }
     }
 }
