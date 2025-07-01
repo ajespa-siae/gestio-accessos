@@ -29,6 +29,13 @@ Route::post('/logout', [DashboardController::class, 'logout'])->name('logout');
 // Actualizar dashboard existente
 Route::get('/dashboard', [OnboardingController::class, 'dashboard'])->middleware(['auth'])->name('dashboard');
 
+// Rutas para gestión de tareas (accesibles para todos los roles autenticados)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/tasques', [OnboardingController::class, 'tasques'])->name('tasques.index');
+    Route::get('/tasques/{tasca}', [OnboardingController::class, 'mostrarTasca'])->name('tasques.show');
+    Route::post('/tasques/{tasca}/completar', [OnboardingController::class, 'completarTasca'])->name('tasques.completar');
+});
+
 // Rutas protegidas para RRHH y admin
 Route::middleware(['auth', 'check.role:rrhh,admin'])->group(function () {
     // Gestió empleats

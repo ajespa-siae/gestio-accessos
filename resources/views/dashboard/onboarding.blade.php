@@ -92,10 +92,10 @@
         </div>
 
         <!-- Widget: Tareas Pendientes -->
-        <div class="col-md-8 mb-4">
+        <div class="col-12 mb-4">
             <div class="card">
                 <div class="card-header bg-warning">
-                    <h5 class="card-title mb-0">Tasques Pendents</h5>
+                    <h5 class="card-title mb-0">Tasques Pendents {{ Auth::user()->rol_principal !== 'admin' ? '(' . ucfirst(Auth::user()->rol_principal) . ')' : '' }}</h5>
                 </div>
                 <div class="card-body">
                     @if(count($tasquesPendents) > 0)
@@ -105,9 +105,10 @@
                                     <tr>
                                         <th>Tasca</th>
                                         <th>Empleat</th>
-                                        <th>Responsable</th>
+                                        <th>Rol Assignat</th>
                                         <th>Data Límit</th>
                                         <th>Estat</th>
+                                        <th>Accions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -134,7 +135,7 @@
                                                 @endif
                                             </td>
                                             <td>
-                                                <span class="badge bg-secondary">{{ $tasca->responsable }}</span>
+                                                <span class="badge bg-primary">{{ strtoupper($tasca->rol_assignat ?: 'No definit') }}</span>
                                             </td>
                                             <td>
                                                 @if($tasca->data_limit)
@@ -145,6 +146,11 @@
                                             </td>
                                             <td>
                                                 <span class="badge {{ $estatClass }}">{{ $estatText }}</span>
+                                            </td>
+                                            <td>
+                                                <a href="{{ route('tasques.show', $tasca) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i> Veure
+                                                </a>
                                             </td>
                                         </tr>
                                     @endforeach

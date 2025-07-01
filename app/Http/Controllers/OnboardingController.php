@@ -66,15 +66,29 @@ class OnboardingController extends Controller
             ->take(5)
             ->get();
         
-        // Tasques pendents
-        $tasquesPendents = ChecklistTask::with(['checklistInstance.empleat', 'checklistInstance.template'])
+        // Tasques pendents filtrades per rol
+        $tasquesPendents = ChecklistTask::with(['checklistInstance.empleat', 'checklistInstance.template', 'usuariAssignat'])
             ->where('completada', false)
             ->whereHas('checklistInstance', function($q) {
                 $q->whereHas('template', function($subq) {
                     $subq->where('tipus', 'onboarding');
                 });
-            })
-            ->orderBy('data_limit')
+            });
+        
+        // Filtrar per rol (excepte admin que veu totes)
+        if ($user->rol_principal !== 'admin') {
+            // Filtrar per rol assignat (si existeix) o per usuari assignat (compatibilitat)
+            $tasquesPendents = $tasquesPendents->where(function($query) use ($user) {
+                // Tasques amb rol_assignat que correspon al rol de l'usuari
+                $query->where('rol_assignat', $user->rol_principal);
+                
+                // O tasques assignades directament a l'usuari (compatibilitat)
+                $query->orWhere('usuari_assignat_id', $user->id);
+            });    
+        }
+        
+        // Obtenir les tasques ordenades per data límit
+        $tasquesPendents = $tasquesPendents->orderBy('data_limit')
             ->take(10)
             ->get();
         
@@ -99,4 +113,86 @@ class OnboardingController extends Controller
     
     // La gestió de plantilles de checklist s'ha eliminat d'aquesta interfície
     // i ara es fa exclusivament des del panell Filament per administradors
+    
+    /**
+     * Mostrar llistat de tasques pendents per l'usuari
+     */
+    public function tasques()
+    {
+        // Obtener el usuario autenticado
+        $user = Auth::user();
+        
+        // Tasques pendents filtrades per rol
+        $tasques = ChecklistTask::with(['checklistInstance.empleat', 'checklistInstance.template'])
+            ->where('completada', false)
+            ->whereHas('checklistInstance', function($q) {
+                $q->whereHas('template', function($subq) {
+                    // Mostrar tanto onboarding como offboarding
+                });
+            });
+        
+        // Filtrar per rol (excepte admin que veu totes)
+        if ($user->rol_principal !== 'admin') {
+            $tasques = $tasques->where(function($query) use ($user) {
+                // Tasques amb rol_assignat que correspon al rol de l'usuari
+                $query->where('rol_assignat', $user->rol_principal);
+                
+                // O tasques assignades directament a l'usuari (compatibilitat)
+                $query->orWhere('usuari_assignat_id', $user->id);
+            });    
+        }
+        
+        // Obtenir les tasques ordenades per data límit
+        $tasques = $tasques->orderBy('data_limit')
+            ->paginate(15);
+        
+        return view('tasques.index', compact('tasques', 'user'));
+    }
+    
+    /**
+     * Mostrar detall d'una tasca
+     */
+    public function mostrarTasca(ChecklistTask $tasca)
+    {
+        $user = Auth::user();
+        
+        // Verificar que l'usuari té permís per veure aquesta tasca
+        if ($user->rol_principal !== 'admin' && 
+            $tasca->rol_assignat !== $user->rol_principal && 
+            $tasca->usuari_assignat_id !== $user->id) {
+            abort(403, 'No tens permís per veure aquesta tasca');
+        }
+        
+        // Carregar relacions necessàries
+        $tasca->load(['checklistInstance.empleat', 'checklistInstance.template']);
+        
+        return view('tasques.show', compact('tasca', 'user'));
+    }
+    
+    /**
+     * Completar una tasca
+     */
+    public function completarTasca(Request $request, ChecklistTask $tasca)
+    {
+        $user = Auth::user();
+        
+        // Verificar que l'usuari té permís per completar aquesta tasca
+        if ($user->rol_principal !== 'admin' && 
+            $tasca->rol_assignat !== $user->rol_principal && 
+            $tasca->usuari_assignat_id !== $user->id) {
+            abort(403, 'No tens permís per completar aquesta tasca');
+        }
+        
+        // Validar request
+        $validated = $request->validate([
+            'observacions' => 'nullable|string|max:500',
+        ]);
+        
+        // Completar la tasca
+        $tasca->completar($user, $validated['observacions'] ?? null);
+        
+        return redirect()
+            ->route('tasques.index')
+            ->with('success', 'Tasca completada correctament');
+    }
 }

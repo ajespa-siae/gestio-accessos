@@ -38,6 +38,11 @@
                             <i class="bi bi-person-badge me-1"></i> Empleats
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('tasques.*') ? 'active' : '' }}" href="{{ route('tasques.index') }}">
+                            <i class="bi bi-check2-square me-1"></i> Tasques
+                        </a>
+                    </li>
                     <!-- La gestió de plantilles ara es fa des del panell Filament per administradors -->
                 </ul>
                 

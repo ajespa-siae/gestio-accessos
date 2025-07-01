@@ -24,7 +24,8 @@ class ChecklistTask extends Model
         'data_limit',
         'usuari_assignat_id',
         'usuari_completat_id',
-        'observacions'
+        'observacions',
+        'rol_assignat'
     ];
 
     protected $casts = [
@@ -79,6 +80,11 @@ class ChecklistTask extends Model
     public function scopePerUsuari(Builder $query, int $usuariId): Builder
     {
         return $query->where('usuari_assignat_id', $usuariId);
+    }
+    
+    public function scopePerRol(Builder $query, string $rol): Builder
+    {
+        return $query->where('rol_assignat', $rol);
     }
 
     public function scopeVencudes(Builder $query): Builder
