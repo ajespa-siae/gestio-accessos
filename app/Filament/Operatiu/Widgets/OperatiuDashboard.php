@@ -92,7 +92,7 @@ class OperatiuDashboard extends BaseWidget
             Stat::make('Sol·licituds Pendents', SolicitudAcces::where('estat', 'pendent')
                 ->when(!$user->hasRole('admin'), function($query) use ($userId) {
                     return $query->where('usuari_solicitant_id', $userId)
-                        ->orWhereHas('empleatDestinatari', function($q) use ($userId) {
+                        ->orWhereHas('empleatDestinatari.departament.gestors', function($q) use ($userId) {
                             $q->where('user_id', $userId);
                         });
                 })
