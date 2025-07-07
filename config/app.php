@@ -149,6 +149,7 @@ return [
         Illuminate\View\ViewServiceProvider::class,
         
         // Proveedores personalizados
+        App\Providers\AuthServiceProvider::class,
         App\Providers\LdapAuthServiceProvider::class,
         App\Providers\FilamentServiceProvider::class,
         App\Providers\MiddlewareServiceProvider::class,
