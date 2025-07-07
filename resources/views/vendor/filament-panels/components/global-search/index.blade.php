@@ -1,3 +1,7 @@
+@php
+    $results = $results ?? [];
+@endphp
+
 <div
     x-data="{}"
     x-on:focus-first-global-search-result.stop="$el.querySelector('.fi-global-search-result-link')?.focus()"
@@ -8,7 +12,7 @@
     <div class="sm:relative">
         <x-filament-panels::global-search.field />
 
-        @if ($results !== null)
+        @if (!empty($results))
             <x-filament-panels::global-search.results-container
                 :results="$results"
             />

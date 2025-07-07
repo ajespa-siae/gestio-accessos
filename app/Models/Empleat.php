@@ -24,6 +24,7 @@ class Empleat extends Model
         'usuari_creador_id',
         'observacions',
         'identificador_unic',
+        'template_onboarding_id',
     ];
 
     protected $casts = [
@@ -40,8 +41,14 @@ class Empleat extends Model
         });
 
         static::created(function ($empleat) {
-            // Dispatch del Job d'onboarding automàtic
-            \App\Jobs\CrearChecklistOnboarding::dispatch($empleat);
+            // Si estamos en el contexto de Filament, no lanzamos el job automáticamente
+            // porque lo haremos desde el controlador de creación con la plantilla seleccionada
+            $isFilamentContext = app()->has('filament') && request()->segment(1) === 'operatiu';
+            
+            if (!$isFilamentContext) {
+                // Dispatch del Job d'onboarding automàtic solo si no estamos en Filament
+                \App\Jobs\CrearChecklistOnboarding::dispatch($empleat);
+            }
         });
     }
 

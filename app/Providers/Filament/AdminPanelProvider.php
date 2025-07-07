@@ -3,8 +3,10 @@
 namespace App\Providers\Filament;
 
 use Filament\Http\Middleware\Authenticate;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -36,6 +38,9 @@ class AdminPanelProvider extends PanelProvider
                 'success' => Color::Emerald,
                 'warning' => Color::Orange,
             ])
+            ->authMiddleware([
+                \App\Http\Middleware\CheckAdminRole::class,
+            ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -56,11 +61,21 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->plugins([
+                FilamentShieldPlugin::make(),
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ])
             ->font('Inter')
             ->sidebarCollapsibleOnDesktop()
+            ->navigationItems([
+                NavigationItem::make('Panel Operatiu')
+                    ->url('/operatiu')
+                    ->icon('heroicon-o-computer-desktop')
+                    ->sort(500)
+                    ->openUrlInNewTab()
+            ])
             ->navigationGroups([
                 'Recursos Humans',
                 'Sistemes',

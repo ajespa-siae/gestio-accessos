@@ -2,14 +2,14 @@
 
 return [
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
-        'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
+        'guard' => 'web',
+        'passwords' => 'users',
     ],
 
     'guards' => [
         'web' => [
             'driver' => 'session',
-            'provider' => 'ldap', // ✅ TORNAR A PROVIDER LDAP ORIGINAL
+            'provider' => 'ldap',
         ],
 
         'api' => [
@@ -21,22 +21,35 @@ return [
     'providers' => [
         // Proveedor LDAP estándar
         'ldap' => [
-            'driver' => 'ldap', // Usar el driver estándar
+            'driver' => 'ldap',
             'model' => App\Ldap\User::class,
             'rules' => [],
             'scopes' => [],
             'database' => [
                 'model' => App\Models\User::class,
-                'sync_passwords' => false,
+                'sync_passwords' => [
+                    'column' => 'password',
+                    'sync' => false, // No sincronizar contraseñas ya que usamos LDAP
+                ],
                 'sync_attributes' => [
                     'name' => 'cn',
                     'email' => 'mail',
                     'username' => 'samaccountname',
                     'nif' => 'employeeid',
+                    'actiu' => function () { return true; }, // Por defecto, los usuarios de LDAP están activos
                 ],
                 'sync_existing' => [
                     'username' => 'samaccountname',
                 ],
+                'password_column' => 'password',
+                'timestamps' => [
+                    'created_at' => 'created_at',
+                    'updated_at' => 'updated_at',
+                ],
+            ],
+            'resolver' => [
+                'username_field' => 'username',
+                'dn_field' => 'ldap_dn',
             ],
         ],
 

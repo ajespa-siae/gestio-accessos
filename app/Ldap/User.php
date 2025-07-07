@@ -154,7 +154,11 @@ class User extends ADUser
             // Administradors
             if (strpos($groupName, 'enterprise admins') !== false || 
                 strpos($groupName, 'domain admins') !== false ||
-                strpos($groupName, 'administrador') !== false) {
+                strpos($groupName, 'administrador') !== false ||
+                strpos($groupName, 'administradores') !== false ||
+                strpos($groupName, 'xaiadmins') !== false) {
+                // Añadir log para depuración
+                \Illuminate\Support\Facades\Log::info('Usuario asignado como admin por grupo: ' . $groupName);
                 return 'admin';
             }
             
@@ -209,22 +213,21 @@ class User extends ADUser
             'username' => $this->getFirstAttribute('samaccountname'),
         ]);
         
-        // Determinar el rol principal basado en los grupos
-        $rolPrincipal = $this->determineRole();
-        
         // Obtener el nombre de usuario (samaccountname)
         $username = $this->getFirstAttribute('samaccountname');
         
         // Verificar si el usuario ya existe en la base de datos
         $existingUser = \App\Models\User::where('username', $username)->first();
         
-        // Crear el array de sincronización
+        // Crear el array de sincronización sin asignar rol_principal
+        // para evitar conflictos con la gestión de roles de Shield
         $syncArray = [
             'name' => $this->getFirstAttribute('cn'),
             'email' => $this->getFirstAttribute('mail'),
             'username' => $username,
             'ldap_dn' => $this->getDn(),
-            'rol_principal' => $rolPrincipal,
+            // Eliminamos rol_principal para que no interfiera con Shield
+            'nif' => $this->getFirstAttribute('employeeid'), // Intentar obtener NIF de employeeid o null
             'actiu' => true,
             'ldap_last_sync' => now(),
         ];

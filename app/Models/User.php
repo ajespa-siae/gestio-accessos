@@ -9,10 +9,47 @@ use Laravel\Sanctum\HasApiTokens;
 use LdapRecord\Laravel\Auth\LdapAuthenticatable;
 use LdapRecord\Laravel\Auth\AuthenticatesWithLdap;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements LdapAuthenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, AuthenticatesWithLdap;
+    use HasApiTokens, HasFactory, Notifiable, AuthenticatesWithLdap, HasRoles;
+    
+    /**
+     * Override hasRole method to fix role detection issues
+     *
+     * @param string|array $roles
+     * @param string|null $guard
+     * @return bool
+     */
+    public function hasRole($roles, $guard = null): bool
+    {
+        // Si roles es null, retornar false directamente
+        if ($roles === null) {
+            return false;
+        }
+
+        // Verificar directamente en la base de datos si el usuario tiene el rol
+        if (is_string($roles)) {
+            return \DB::table('model_has_roles')
+                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->where('model_has_roles.model_id', $this->id)
+                ->where('model_has_roles.model_type', get_class($this))
+                ->where('roles.name', $roles)
+                ->exists();
+        }
+        
+        // Si es un array de roles, verificar cada uno
+        if (is_array($roles) || $roles instanceof \Traversable) {
+            foreach ($roles as $role) {
+                if ($this->hasRole($role, $guard)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
 
     protected $fillable = [
         'name',
@@ -117,6 +154,23 @@ class User extends Authenticatable implements LdapAuthenticatable
     public function teRol(string $rol): bool
     {
         return $this->rol_principal === $rol;
+    }
+    
+    /**
+     * Verifica si el usuario tiene el rol especificado en el campo rol_principal.
+     * Renombrado para evitar conflictos con el trait HasRoles de Spatie.
+     */
+    public function hasLdapRole(string $role): bool
+    {
+        return $this->teRol($role);
+    }
+    
+    /**
+     * Verifica si el usuario tiene al menos uno de los roles especificados.
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return in_array($this->rol_principal, $roles);
     }
 
     public function esAdmin(): bool
@@ -242,12 +296,16 @@ class User extends Authenticatable implements LdapAuthenticatable
                 'ldap_sync_errors' => null,
             ]);
 
-            // Actualitzar rol només si és empleat (no sobreescriure rols assignats manualment)
-            if ($this->rol_principal === 'empleat' || $this->rol_principal === null) {
-                $ldapRole = $syncData['rol_principal'];
-                if ($ldapRole && $ldapRole !== 'empleat') {
-                    $this->update(['rol_principal' => $ldapRole]);
-                }
+            // Actualitzar rol si és empleat o si el rol de LDAP és 'admin' (admin sempre preval)
+            $ldapRole = $syncData['rol_principal'] ?? null;
+            
+            // Si el rol de LDAP es 'admin', siempre prevalece
+            if ($ldapRole === 'admin') {
+                $this->update(['rol_principal' => 'admin']);
+            }
+            // En otros casos, solo actualizar si el usuario no tiene un rol asignado o es empleado
+            elseif (($this->rol_principal === 'empleat' || $this->rol_principal === null) && $ldapRole && $ldapRole !== 'empleat') {
+                $this->update(['rol_principal' => $ldapRole]);
             }
 
             return $updated;

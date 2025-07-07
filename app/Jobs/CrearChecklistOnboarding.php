@@ -16,22 +16,35 @@ class CrearChecklistOnboarding implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    protected ?ChecklistTemplate $templateEspecifica = null;
+
     public function __construct(
-        public Empleat $empleat
-    ) {}
+        public Empleat $empleat,
+        ?int $templateId = null
+    ) {
+        if ($templateId) {
+            $this->templateEspecifica = ChecklistTemplate::find($templateId);
+        }
+    }
 
     public function handle(): void
     {
         try {
-            // Buscar template (departament específic o global)
-            $template = ChecklistTemplate::where('tipus', 'onboarding')
-                ->where('actiu', true)
-                ->where(function($q) {
-                    $q->where('departament_id', $this->empleat->departament_id)
-                      ->orWhereNull('departament_id');
-                })
-                ->orderByRaw('departament_id IS NULL') // Departament específic primer
-                ->first();
+            // Si se ha proporcionado una plantilla específica en el constructor
+            if ($this->templateEspecifica && $this->templateEspecifica->actiu && $this->templateEspecifica->tipus === 'onboarding') {
+                $template = $this->templateEspecifica;
+                Log::info("Utilitzant plantilla d'onboarding específica ID: {$template->id} per l'empleat {$this->empleat->identificador_unic}");
+            } else {
+                // Buscar template (departament específic o global)
+                $template = ChecklistTemplate::where('tipus', 'onboarding')
+                    ->where('actiu', true)
+                    ->where(function($q) {
+                        $q->where('departament_id', $this->empleat->departament_id)
+                          ->orWhereNull('departament_id');
+                    })
+                    ->orderByRaw('departament_id IS NULL') // Departament específic primer
+                    ->first();
+            }
 
             if (!$template) {
                 Log::warning("No s'ha trobat template d'onboarding per l'empleat {$this->empleat->identificador_unic}");

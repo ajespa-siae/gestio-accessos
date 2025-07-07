@@ -158,35 +158,72 @@ class DatabaseSeeder extends Seeder
             'nom' => 'Gestor d\'Expedients',
             'descripcio' => 'Sistema de gestió d\'expedients municipals',
             'actiu' => true,
-            'configuracio_validadors' => ['gestor', 'cap_area'],
         ]);
 
-        $sistema1->afegirNivellAcces('Consulta', 'Només lectura d\'expedients', 1);
-        $sistema1->afegirNivellAcces('Gestió', 'Creació i modificació d\'expedients', 2);
-        $sistema1->afegirNivellAcces('Supervisor', 'Totes les funcionalitats', 3);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema1->id,
+            'nom' => 'Consulta',
+            'descripcio' => 'Només lectura d\'expedients',
+            'ordre' => 1
+        ]);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema1->id,
+            'nom' => 'Gestió',
+            'descripcio' => 'Creació i modificació d\'expedients',
+            'ordre' => 2
+        ]);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema1->id,
+            'nom' => 'Supervisor',
+            'descripcio' => 'Totes les funcionalitats',
+            'ordre' => 3
+        ]);
 
         // Sistema 2: Gestió Comptable
         $sistema2 = Sistema::create([
             'nom' => 'Gestió Comptable',
             'descripcio' => 'Sistema de comptabilitat municipal',
             'actiu' => true,
-            'configuracio_validadors' => ['gestor', 'interventor'],
         ]);
 
-        $sistema2->afegirNivellAcces('Consulta', 'Consulta de dades comptables', 1);
-        $sistema2->afegirNivellAcces('Comptable', 'Gestió d\'assentaments', 2);
-        $sistema2->afegirNivellAcces('Administrador', 'Control total', 3);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema2->id,
+            'nom' => 'Consulta',
+            'descripcio' => 'Consulta de dades comptables',
+            'ordre' => 1
+        ]);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema2->id,
+            'nom' => 'Comptable',
+            'descripcio' => 'Gestió d\'assentaments',
+            'ordre' => 2
+        ]);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema2->id,
+            'nom' => 'Administrador',
+            'descripcio' => 'Control total',
+            'ordre' => 3
+        ]);
 
         // Sistema 3: Correu Corporatiu
         $sistema3 = Sistema::create([
             'nom' => 'Correu Corporatiu',
             'descripcio' => 'Compte de correu electrònic corporatiu',
             'actiu' => true,
-            'configuracio_validadors' => ['it'],
         ]);
 
-        $sistema3->afegirNivellAcces('Bústia Personal', 'Compte de correu individual', 1);
-        $sistema3->afegirNivellAcces('Bústia Compartida', 'Accés a bústies compartides', 2);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema3->id,
+            'nom' => 'Bústia Personal',
+            'descripcio' => 'Compte de correu individual',
+            'ordre' => 1
+        ]);
+        NivellAccesSistema::create([
+            'sistema_id' => $sistema3->id,
+            'nom' => 'Bústia Compartida',
+            'descripcio' => 'Accés a bústies compartides',
+            'ordre' => 2
+        ]);
 
         // Associar sistemes a departaments
         $departaments = Departament::all();
@@ -207,154 +244,214 @@ class DatabaseSeeder extends Seeder
     private function crearChecklistTemplates(): void
     {
         // Template global d'onboarding
-        ChecklistTemplate::create([
+        $onboardingGeneral = \App\Models\ChecklistTemplate::create([
             'nom' => 'Onboarding General',
             'departament_id' => null, // Global
             'tipus' => 'onboarding',
-            'actiu' => true,
-            'tasques_template' => [
-                [
-                    'nom' => 'Crear usuari LDAP',
-                    'descripcio' => 'Crear compte d\'usuari al directori actiu',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Crear compte de correu',
-                    'descripcio' => 'Configurar bústia de correu corporatiu',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Preparar equip informàtic',
-                    'descripcio' => 'Assignar i configurar ordinador',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Lliurar targeta d\'accés',
-                    'descripcio' => 'Programar i lliurar targeta d\'empleat',
-                    'rol_assignat' => 'rrhh',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Sessió de benvinguda',
-                    'descripcio' => 'Reunió inicial amb RRHH',
-                    'rol_assignat' => 'rrhh',
-                    'obligatoria' => true,
-                ],
-            ],
+            'actiu' => true
         ]);
+
+        // Tasques per a l'onboarding general
+        $tareasOnboarding = [
+            [
+                'nom' => 'Crear usuari LDAP',
+                'descripcio' => 'Crear compte d\'usuari al directori actiu',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 1
+            ],
+            [
+                'nom' => 'Crear compte de correu',
+                'descripcio' => 'Configurar bústia de correu corporatiu',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 2
+            ],
+            [
+                'nom' => 'Preparar equip informàtic',
+                'descripcio' => 'Assignar i configurar ordinador',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 3
+            ],
+            [
+                'nom' => 'Lliurar targeta d\'accés',
+                'descripcio' => 'Programar i lliurar targeta d\'empleat',
+                'rol_assignat' => 'rrhh',
+                'obligatoria' => true,
+                'ordre' => 4
+            ],
+            [
+                'nom' => 'Sessió de benvinguda',
+                'descripcio' => 'Reunió inicial amb RRHH',
+                'rol_assignat' => 'rrhh',
+                'obligatoria' => true,
+                'ordre' => 5
+            ]
+        ];
+
+        foreach ($tareasOnboarding as $index => $tarea) {
+            $onboardingGeneral->tasquesTemplate()->create([
+                'nom' => $tarea['nom'],
+                'descripcio' => $tarea['descripcio'],
+                'rol_assignat' => $tarea['rol_assignat'],
+                'obligatoria' => $tarea['obligatoria'],
+                'ordre' => $index + 1,
+                'activa' => true
+            ]);
+        }
 
         // Template d'onboarding específic per Informàtica
         $deptInformatica = Departament::where('nom', 'Informàtica')->first();
-        ChecklistTemplate::create([
+        $onboardingIT = \App\Models\ChecklistTemplate::create([
             'nom' => 'Onboarding Informàtica',
             'departament_id' => $deptInformatica->id,
             'tipus' => 'onboarding',
-            'actiu' => true,
-            'tasques_template' => [
-                [
-                    'nom' => 'Crear usuari LDAP',
-                    'descripcio' => 'Crear compte d\'usuari al directori actiu',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Crear compte de correu',
-                    'descripcio' => 'Configurar bústia de correu corporatiu',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Preparar equip informàtic avançat',
-                    'descripcio' => 'Assignar equip amb privilegis de desenvolupador',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Configurar accés VPN',
-                    'descripcio' => 'Establir accés remot segur',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Accés a repositoris de codi',
-                    'descripcio' => 'Configurar Git i accés a repos',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-            ],
+            'actiu' => true
         ]);
 
+        // Tasques per a l'onboarding d'Informàtica
+        $tareasOnboardingIT = [
+            [
+                'nom' => 'Crear usuari LDAP',
+                'descripcio' => 'Crear compte d\'usuari al directori actiu',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 1
+            ],
+            [
+                'nom' => 'Crear compte de correu',
+                'descripcio' => 'Configurar bústia de correu corporatiu',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 2
+            ],
+            [
+                'nom' => 'Preparar equip informàtic avançat',
+                'descripcio' => 'Assignar equip amb privilegis de desenvolupador',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 3
+            ],
+            [
+                'nom' => 'Configurar accés VPN',
+                'descripcio' => 'Establir accés remot segur',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 4
+            ],
+            [
+                'nom' => 'Accés a repositoris de codi',
+                'descripcio' => 'Configurar Git i accés a repos',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 5
+            ]
+        ];
+
+        foreach ($tareasOnboardingIT as $index => $tarea) {
+            $onboardingIT->tasquesTemplate()->create([
+                'nom' => $tarea['nom'],
+                'descripcio' => $tarea['descripcio'],
+                'rol_assignat' => $tarea['rol_assignat'],
+                'obligatoria' => $tarea['obligatoria'],
+                'ordre' => $index + 1,
+                'activa' => true
+            ]);
+        }
+
         // Template global d'offboarding
-        ChecklistTemplate::create([
+        $offboardingGeneral = \App\Models\ChecklistTemplate::create([
             'nom' => 'Offboarding General',
             'departament_id' => null, // Global
             'tipus' => 'offboarding',
-            'actiu' => true,
-            'tasques_template' => [
-                [
-                    'nom' => 'Revocar accessos als sistemes',
-                    'descripcio' => 'Desactivar tots els comptes d\'usuari',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Recuperar equip informàtic',
-                    'descripcio' => 'Recollir ordinador, perifèrics i accessoris',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Backup de dades',
-                    'descripcio' => 'Fer còpia de seguretat de les dades de l\'usuari',
-                    'rol_assignat' => 'it',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Recuperar targeta d\'accés',
-                    'descripcio' => 'Recollir i desactivar targeta d\'empleat',
-                    'rol_assignat' => 'rrhh',
-                    'obligatoria' => true,
-                ],
-                [
-                    'nom' => 'Entrevista de sortida',
-                    'descripcio' => 'Reunió final amb RRHH',
-                    'rol_assignat' => 'rrhh',
-                    'obligatoria' => false,
-                ],
-            ],
+            'actiu' => true
         ]);
+
+        // Tasques per a l'offboarding general
+        $tareasOffboarding = [
+            [
+                'nom' => 'Revocar accessos als sistemes',
+                'descripcio' => 'Desactivar tots els comptes d\'usuari',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 1
+            ],
+            [
+                'nom' => 'Recuperar equip informàtic',
+                'descripcio' => 'Recollir ordinador, perifèrics i accessoris',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 2
+            ],
+            [
+                'nom' => 'Backup de dades',
+                'descripcio' => 'Fer còpia de seguretat de les dades de l\'usuari',
+                'rol_assignat' => 'it',
+                'obligatoria' => true,
+                'ordre' => 3
+            ],
+            [
+                'nom' => 'Recuperar targeta d\'accés',
+                'descripcio' => 'Recollir i desactivar targeta d\'empleat',
+                'rol_assignat' => 'rrhh',
+                'obligatoria' => true,
+                'ordre' => 4
+            ],
+            [
+                'nom' => 'Entrevista de sortida',
+                'descripcio' => 'Reunió final amb RRHH',
+                'rol_assignat' => 'rrhh',
+                'obligatoria' => false,
+                'ordre' => 5
+            ]
+        ];
+
+        foreach ($tareasOffboarding as $index => $tarea) {
+            $offboardingGeneral->tasquesTemplate()->create([
+                'nom' => $tarea['nom'],
+                'descripcio' => $tarea['descripcio'],
+                'rol_assignat' => $tarea['rol_assignat'],
+                'obligatoria' => $tarea['obligatoria'],
+                'ordre' => $index + 1,
+                'activa' => true
+            ]);
+        }
 
         $this->command->info('Templates de checklist creats correctament');
     }
 
     private function crearConfiguracio(): void
     {
+        $configEmail = [
+            'actiu' => true,
+            'from_address' => 'noreply@esparreguera.cat',
+            'from_name' => 'Sistema RRHH',
+        ];
+
+        $configExpiracio = ['dies' => 7];
+
+        $configLdap = [
+            'actiu' => true,
+            'interval_hores' => 24,
+            'ultim_sync' => null,
+        ];
+
         Configuracio::create([
             'clau' => 'email_notificacions',
-            'valor' => [
-                'actiu' => true,
-                'from_address' => 'noreply@esparreguera.cat',
-                'from_name' => 'Sistema RRHH',
-            ],
+            'valor' => json_encode($configEmail),
             'descripcio' => 'Configuració de notificacions per email',
         ]);
 
         Configuracio::create([
             'clau' => 'temps_expiracio_validacio',
-            'valor' => ['dies' => 7],
+            'valor' => json_encode($configExpiracio),
             'descripcio' => 'Dies màxims per validar una sol·licitud',
         ]);
 
         Configuracio::create([
             'clau' => 'ldap_sync',
-            'valor' => [
-                'actiu' => true,
-                'interval_hores' => 24,
-                'ultim_sync' => null,
-            ],
+            'valor' => json_encode($configLdap),
             'descripcio' => 'Configuració de sincronització LDAP',
         ]);
 

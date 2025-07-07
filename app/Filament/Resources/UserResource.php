@@ -33,10 +33,12 @@ class UserResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $problemUsers = User::where('rol_principal', 'gestor')
-                           ->whereDoesntHave('departamentsGestionats')
-                           ->where('actiu', true)
-                           ->count();
+        $problemUsers = User::whereHas('roles', function ($query) {
+                            $query->where('name', 'gestor');
+                        })
+                        ->whereDoesntHave('departamentsGestionats')
+                        ->where('actiu', true)
+                        ->count();
         
         return $problemUsers > 0 ? (string) $problemUsers : null;
     }
@@ -77,19 +79,11 @@ class UserResource extends Resource
 
             Forms\Components\Section::make('Informació del Sistema')
                 ->schema([
-                    Forms\Components\Select::make('rol_principal')
-                        ->label('Rol Principal')
-                        ->required()
-                        ->options([
-                            'admin' => 'Administrador',
-                            'rrhh' => 'Recursos Humans',
-                            'it' => 'Informàtica',
-                            'gestor' => 'Gestor de Departament',
-                            'empleat' => 'Empleat',
-                        ])
-                        ->default('empleat')
-                        ->live()
-                        ->helperText('Rol principal de l\'usuari al sistema'),
+                    Forms\Components\CheckboxList::make('roles')
+                        ->label('Rols')
+                        ->relationship('roles', 'name')
+                        ->helperText('Selecciona els rols que tindrà l\'usuari al sistema')
+                        ->columns(2),
 
                     Forms\Components\Toggle::make('actiu')
                         ->label('Usuari Actiu')
@@ -116,7 +110,10 @@ class UserResource extends Resource
                         ->columns(2)
                         ->helperText('Només aplicable per usuaris amb rol "Gestor"'),
                 ])
-                ->visible(fn (Forms\Get $get): bool => $get('rol_principal') === 'gestor'),
+                ->visible(function (Forms\Get $get, ?User $record): bool {
+                    if (!$record) return false;
+                    return $record->hasRole('gestor');
+                }),
 
             Forms\Components\Section::make('Credencials')
                 ->schema([
@@ -164,23 +161,13 @@ class UserResource extends Resource
                     ->copyable()
                     ->icon('heroicon-m-envelope'),
 
-                Tables\Columns\BadgeColumn::make('rol_principal')
-                    ->label('Rol')
-                    ->colors([
-                        'danger' => 'admin',
-                        'warning' => 'rrhh',
-                        'primary' => 'it',
-                        'success' => 'gestor',
-                        'secondary' => 'empleat',
-                    ])
-                    ->formatStateUsing(fn (string $state): string => match($state) {
-                        'admin' => 'Admin',
-                        'rrhh' => 'RRHH',
-                        'it' => 'IT',
-                        'gestor' => 'Gestor',
-                        'empleat' => 'Empleat',
-                        default => $state
-                    }),
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->label('Rols')
+                    ->badge()
+                    ->color('primary')
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList(),
 
                 Tables\Columns\IconColumn::make('actiu')
                     ->label('Actiu')
