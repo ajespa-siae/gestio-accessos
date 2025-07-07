@@ -22,7 +22,7 @@ class CheckAdminRole
             return $next($request);
         }
         
-        $isAdmin = $user->hasRole('admin');
+        $isAdmin = $user->hasRole('admin') || $user->hasRole('super_admin');
         $hasOperativeRole = $user->hasAnyRole(['rrhh', 'it', 'gestor']);
         
         // Si está intentando acceder al panel de admin pero no es admin
