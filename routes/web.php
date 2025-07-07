@@ -31,6 +31,5 @@ Route::get('/debug/auth-user', [DebugController::class, 'showAuthUser'])
     ->middleware('auth');
 
 // Rutas temporales para depuración
-Route::get('/debug/roles', [DebugRolesController::class, 'index'])
-    ->name('debug.roles');
-Route::get('/debug/resources', [DebugResourcesController::class, 'index']);
+Route::get('/debug/roles', [\App\Http\Controllers\DebugRolesController::class, 'index'])->name('debug.roles');
+Route::get('/debug/resources', [\App\Http\Controllers\DebugResourcesController::class, 'index'])->name('debug.resources');
