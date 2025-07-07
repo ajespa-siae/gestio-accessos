@@ -41,6 +41,7 @@ project:
       - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=admin --no-interaction || echo "Error al generar políticas de Shield para panel admin, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=operatiu --no-interaction || echo "Error al generar políticas de Shield para panel operatiu, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:super-admin --user=8 || echo "Error al asignar super_admin, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan shield:assign-all-permissions || echo "Error al asignar todos los permisos al super_admin, continuando de todos modos"'
 
       # Optimizar la aplicación (sin cachear configuración)
       - 'cd {release_directory} && php8.4 artisan config:clear'
