@@ -42,6 +42,11 @@ project:
       - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=operatiu --no-interaction || echo "Error al generar políticas de Shield para panel operatiu, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:super-admin --user=8 || echo "Error al asignar super_admin, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:assign-all-permissions || echo "Error al asignar todos los permisos al super_admin, continuando de todos modos"'
+      
+      # Verificar y corregir la configuración de Shield
+      - 'cd {release_directory} && php8.4 artisan shield:fix-config || echo "Error al corregir configuración de Shield, continuando de todos modos"'
+      # Asegurar que AuthServiceProvider esté registrado en config/app.php
+      - 'cd {release_directory} && grep -q "App\\\\Providers\\\\AuthServiceProvider" {release_directory}/config/app.php || echo "App\\\\Providers\\\\AuthServiceProvider::class," >> {release_directory}/config/app.php'
 
       # Optimizar la aplicación (sin cachear configuración)
       - 'cd {release_directory} && php8.4 artisan config:clear'
