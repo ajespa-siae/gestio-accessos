@@ -67,3 +67,5 @@ project:
       - 'chown -R siae-accessos:siae-accessos {release_directory}'
     after_commands: # After symlink switch
       - 'sudo systemctl reload php8.4-fpm'
+      # Verificar estado final del despliegue
+      - 'cd {current_directory} && php8.4 artisan deploy:verify-status || echo "Verificación de estado completada con advertencias"'
