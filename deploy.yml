@@ -1,0 +1,63 @@
+project:
+  git_repository: 'git@github.com:ajespa-siae/gestio-accessos.git'
+  deploy:
+    directory: '/home/siae-accessos/htdocs/accessos.siae.cat'
+    shared_directories:
+      - 'storage/logs'
+      - 'storage/app'
+      #- 'storage/framework'
+      #- 'bootstrap/cache'
+    before_commands: # Before symlink switch
+      # Crear directorios necesarios y establecer permisos
+      - 'mkdir -p {release_directory}/bootstrap/cache'
+      - 'chmod -R 775 {release_directory}/bootstrap/cache'
+      - 'mkdir -p {release_directory}/storage/framework/cache'
+      - 'mkdir -p {release_directory}/storage/framework/sessions'
+      - 'mkdir -p {release_directory}/storage/framework/views'
+      - 'chmod -R 775 {release_directory}/storage'
+
+      # Instalar extensión pdo_pgsql si es necesario
+      - 'sudo apt-get update && sudo apt-get install -y php8.4-pgsql || true'
+
+      # Copiar archivo de entorno y configurar
+      #- 'cp {release_directory}/.env.production {release_directory}/.env'
+
+      # Instalar dependencias y optimizar
+      - 'cd {release_directory} && COMPOSER_ALLOW_SUPERUSER=1 php8.4 /usr/local/bin/composer install --no-dev --optimize-autoloader'
+      - 'cd {release_directory} && php8.4 artisan key:generate --force'
+      - 'cd {release_directory} && php8.4 artisan storage:link'
+      - 'cd {release_directory} && npm install || echo "Error en npm install, continuando de todos modos"'
+      - 'cd {release_directory} && npm run build || echo "Error en npm run build, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan vendor:publish --tag=filament-assets --force || echo "Error al publicar assets de Filament, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan livewire:publish --assets || echo "Error al publicar assets de Livewire, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan vendor:publish --tag=filament-shield-config --force || echo "Error al publicar configuración de Shield, continuando de todos modos"'
+
+      # Ejecutar migraciones si la base de datos está configurada correctamente
+      #- 'cd {release_directory} && php8.4 artisan migrate --force || echo "Error en migraciones, verificar conexión a la base de datos"'
+      
+      # Comandos específicos para Shield (sin migraciones)
+      - 'cd {release_directory} && php8.4 artisan vendor:publish --tag=filament-shield-migrations --force || echo "Error al publicar migraciones de Shield, continuando de todos modos"'
+      # Generar políticas para ambos paneles sin interacción
+      - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=admin --no-interaction || echo "Error al generar políticas de Shield para panel admin, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=operatiu --no-interaction || echo "Error al generar políticas de Shield para panel operatiu, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan shield:super-admin --user=8 || echo "Error al asignar super_admin, continuando de todos modos"'
+
+      # Optimizar la aplicación (sin cachear configuración)
+      - 'cd {release_directory} && php8.4 artisan config:clear'
+      - 'cd {release_directory} && php8.4 artisan route:clear'
+      - 'cd {release_directory} && php8.4 artisan view:clear'
+      - 'cd {release_directory} && php8.4 artisan cache:clear'
+      - 'cd {release_directory} && php8.4 artisan optimize:clear'
+      # Limpiar caché de permisos de Spatie
+      - 'cd {release_directory} && php8.4 artisan permission:cache-reset || echo "Error al limpiar caché de permisos, continuando de todos modos"'
+      # No usar optimize completo para evitar errores de serialización
+      - 'cd {release_directory} && php8.4 artisan route:cache || echo "Error en route:cache, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan view:cache || echo "Error en view:cache, continuando de todos modos"'
+      - 'cd {release_directory} && php8.4 artisan queue:restart || echo "Error al reiniciar colas, continuando de todos modos"'
+
+      # Establecer permisos correctos
+      - 'find {release_directory} -type d -exec chmod 0775 {} \;'
+      - 'find {release_directory} -type f -exec chmod 0664 {} \;'
+      - 'chown -R siae-accessos:siae-accessos {release_directory}'
+    after_commands: # After symlink switch
+      - 'sudo systemctl reload php8.4-fpm'

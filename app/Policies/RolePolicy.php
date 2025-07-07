@@ -15,8 +15,14 @@ class RolePolicy
      */
     public function viewAny(User $user): bool
     {
-        // Permitir acceso solo a usuarios con rol super_admin
-        return $user->hasRole('super_admin');
+        // Permitir acceso a usuarios con rol admin o super_admin
+        // Verificación directa en la base de datos para evitar problemas con el método hasRole
+        return \DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->where('model_has_roles.model_type', get_class($user))
+            ->whereIn('roles.name', ['admin', 'super_admin'])
+            ->exists();
     }
 
     /**
@@ -24,8 +30,14 @@ class RolePolicy
      */
     public function view(User $user, Role $role): bool
     {
-        // Permitir acceso solo a usuarios con rol super_admin
-        return $user->hasRole('super_admin');
+        // Permitir acceso a usuarios con rol admin o super_admin
+        // Verificación directa en la base de datos para evitar problemas con el método hasRole
+        return \DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->where('model_has_roles.model_type', get_class($user))
+            ->whereIn('roles.name', ['admin', 'super_admin'])
+            ->exists();
     }
 
     /**
@@ -33,8 +45,14 @@ class RolePolicy
      */
     public function create(User $user): bool
     {
-        // Permitir acceso solo a usuarios con rol super_admin
-        return $user->hasRole('super_admin');
+        // Permitir acceso a usuarios con rol admin o super_admin
+        // Verificación directa en la base de datos para evitar problemas con el método hasRole
+        return \DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->where('model_has_roles.model_type', get_class($user))
+            ->whereIn('roles.name', ['admin', 'super_admin'])
+            ->exists();
     }
 
     /**
@@ -42,8 +60,14 @@ class RolePolicy
      */
     public function update(User $user, Role $role): bool
     {
-        // Permitir acceso solo a usuarios con rol super_admin
-        return $user->hasRole('super_admin');
+        // Permitir acceso a usuarios con rol admin o super_admin
+        // Verificación directa en la base de datos para evitar problemas con el método hasRole
+        return \DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->where('model_has_roles.model_type', get_class($user))
+            ->whereIn('roles.name', ['admin', 'super_admin'])
+            ->exists();
     }
 
     /**

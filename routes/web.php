@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\DebugController;
+use App\Http\Controllers\DebugRolesController;
 
 
 /*
@@ -29,4 +30,7 @@ Route::get('/debug/auth-user', [DebugController::class, 'showAuthUser'])
     ->name('debug.auth-user')
     ->middleware('auth');
 
+// Ruta de depuración para roles y permisos
+Route::get('/debug/roles', [DebugRolesController::class, 'index'])
+    ->name('debug.roles');
 
