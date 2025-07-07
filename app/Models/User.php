@@ -10,8 +10,10 @@ use LdapRecord\Laravel\Auth\LdapAuthenticatable;
 use LdapRecord\Laravel\Auth\AuthenticatesWithLdap;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\Permission\Traits\HasRoles;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
-class User extends Authenticatable implements LdapAuthenticatable
+class User extends Authenticatable implements LdapAuthenticatable, FilamentUser
 {
     use HasApiTokens, HasFactory, Notifiable, AuthenticatesWithLdap, HasRoles;
     
@@ -220,6 +222,25 @@ class User extends Authenticatable implements LdapAuthenticatable
     public function necessitaDepartaments(): bool
     {
         return $this->esGestor() && $this->departamentsGestionats()->count() === 0;
+    }
+    
+    /**
+     * Determina si el usuario puede acceder al panel de Filament.
+     * Requerido por la interfaz FilamentUser para evitar errores 403 en producción.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        // Permitir acceso al panel admin a usuarios con rol admin o super_admin
+        if ($panel->getId() === 'admin') {
+            return $this->hasRole(['admin', 'super_admin']);
+        }
+        
+        // Permitir acceso al panel operativo a usuarios con cualquier rol válido
+        if ($panel->getId() === 'operatiu') {
+            return $this->hasRole(['admin', 'super_admin', 'rrhh', 'it', 'gestor']);
+        }
+        
+        return false;
     }
 
     // ===== MÈTODES LDAP =====
