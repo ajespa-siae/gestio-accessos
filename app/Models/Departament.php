@@ -46,7 +46,7 @@ class Departament extends Model
                     ->withPivot('gestor_principal', 'created_at', 'updated_at')
                     ->withTimestamps()
                     ->where('users.actiu', true)
-                    ->orderByRaw('departament_gestors.gestor_principal DESC, users.name ASC'); // SINTAXI CORRECTA
+                    ->orderBy('users.name', 'asc'); // Ordenamiento simplificado para evitar problemas con PostgreSQL
     }
 
     /**
@@ -92,6 +92,19 @@ class Departament extends Model
     public function configuracions(): HasMany
     {
         return $this->hasMany(DepartamentConfiguracio::class);
+    }
+    
+    /**
+     * Usuarios que gestionan este departamento (relación inversa a departamentsGestionats)
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            User::class, 
+            'departament_gestors', 
+            'departament_id', 
+            'user_id'
+        )->withPivot('gestor_principal')->withTimestamps();
     }
 
     // ================================

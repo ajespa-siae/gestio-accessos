@@ -96,46 +96,6 @@ class UserResource extends Resource
                         ->helperText('Marcar si l\'usuari es sincronitza amb Active Directory'),
                 ])
                 ->columns(3),
-
-            Forms\Components\Section::make('Departaments Gestionats')
-                ->schema([
-                    Forms\Components\CheckboxList::make('departaments_gestionats')
-                        ->label('Departaments que Gestiona')
-                        ->relationship('departamentsGestionats', 'nom')
-                        ->options(
-                            Departament::where('actiu', true)
-                                ->pluck('nom', 'id')
-                                ->toArray()
-                        )
-                        ->columns(2)
-                        ->helperText('Només aplicable per usuaris amb rol "Gestor"'),
-                ])
-                ->visible(function (Forms\Get $get, ?User $record): bool {
-                    if (!$record) return false;
-                    return $record->hasRole('gestor');
-                }),
-
-            Forms\Components\Section::make('Credencials')
-                ->schema([
-                    Forms\Components\TextInput::make('password')
-                        ->label('Contrasenya')
-                        ->password()
-                        ->revealable()
-                        ->rules([Password::defaults()])
-                        ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
-                        ->dehydrated(fn ($state) => filled($state))
-                        ->helperText('Deixar buit per mantenir la contrasenya actual'),
-
-                    Forms\Components\TextInput::make('password_confirmation')
-                        ->label('Confirmar Contrasenya')
-                        ->password()
-                        ->revealable()
-                        ->same('password')
-                        ->dehydrated(false),
-                ])
-                ->columns(2)
-                ->collapsible()
-                ->collapsed(),
         ]);
     }
 
@@ -146,27 +106,30 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nom')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->wrap(),
 
                 Tables\Columns\TextColumn::make('username')
                     ->label('Username')
                     ->searchable()
                     ->sortable()
-                    ->copyable(),
+                    ->copyable()
+                    ->wrap(),
 
                 Tables\Columns\TextColumn::make('email')
                     ->label('Email')
                     ->searchable()
                     ->sortable()
                     ->copyable()
-                    ->icon('heroicon-m-envelope'),
+                    ->icon('heroicon-m-envelope')
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('roles.name')
                     ->label('Rols')
                     ->badge()
                     ->color('primary')
                     ->listWithLineBreaks()
-                    ->limitList(3)
+                    ->limitList(2)
                     ->expandableLimitedList(),
 
                 Tables\Columns\IconColumn::make('actiu')
@@ -177,18 +140,18 @@ class UserResource extends Resource
                 Tables\Columns\IconColumn::make('ldap_managed')
                     ->label('LDAP')
                     ->boolean()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('departamentsGestionats.nom')
                     ->label('Departaments')
                     ->listWithLineBreaks()
-                    ->limitList(2)
+                    ->limitList(1)
                     ->expandableLimitedList()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Creat')
-                    ->dateTime('d/m/Y H:i')
+                    ->dateTime('d/m/Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

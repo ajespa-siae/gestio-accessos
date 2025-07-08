@@ -73,19 +73,6 @@ class DepartamentResource extends Resource
                             ->helperText('Departament actiu'),
                     ])
                     ->columns(3),
-
-                Forms\Components\Section::make('Sistemes Disponibles')
-                    ->schema([
-                        CheckboxList::make('sistemes_seleccionats')
-                            ->label('Sistemes del Departament')
-                            ->options(function () {
-                                return Sistema::where('actiu', true)->pluck('nom', 'id');
-                            })
-                            ->columns(2)
-                            ->helperText('Sistemes als quals aquest departament pot sol·licitar accés')
-                            ->columnSpanFull(),
-                    ])
-                    ->collapsible(),
             ]);
     }
 

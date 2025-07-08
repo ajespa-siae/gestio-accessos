@@ -79,7 +79,7 @@ class GestorsRelationManager extends RelationManager
                     ->label('Principal')
                     ->boolean()
                     ->trueIcon('heroicon-o-star')
-                    ->falseIcon('heroicon-o-outline-star')
+                    ->falseIcon('heroicon-o-x-mark')
                     ->trueColor('warning')
                     ->falseColor('gray')
                     ->getStateUsing(function (User $record): bool {
@@ -141,29 +141,49 @@ class GestorsRelationManager extends RelationManager
                     ->default(),
             ])
             ->headerActions([
-                AttachAction::make()
+                Action::make('afegir_gestor')
                     ->label('Afegir Gestor')
                     ->modalHeading('Afegir Gestor al Departament')
-                    ->preloadRecordSelect()
-                    ->recordSelectOptionsQuery(fn (Builder $query) => 
-                        $query->where('actiu', true)
-                              ->whereIn('rol_principal', ['admin', 'rrhh', 'gestor'])
-                              ->whereNotExists(function ($subquery) {
-                                  $subquery->select(DB::raw(1))
-                                         ->from('departament_gestors')
-                                         ->whereColumn('departament_gestors.user_id', 'users.id')
-                                         ->where('departament_gestors.departament_id', $this->getOwnerRecord()->id);
-                              })
-                    )
-                    ->form(fn (AttachAction $action): array => [
-                        $action->getRecordSelect(),
+                    ->icon('heroicon-o-plus')
+                    ->form([
+                        Select::make('user_id')
+                            ->label('Usuari')
+                            ->options(function () {
+                                // Obtener usuarios activos con rol gestor que no están ya asignados a este departamento
+                                $departamentId = $this->getOwnerRecord()->id;
+                                
+                                // Obtener usuarios con rol gestor usando RBAC
+                                $usuariosGestores = User::where('actiu', true)
+                                    ->whereHas('roles', function ($query) {
+                                        $query->where('name', 'gestor');
+                                    })
+                                    ->whereNotExists(function ($query) use ($departamentId) {
+                                        $query->select(DB::raw(1))
+                                            ->from('departament_gestors')
+                                            ->whereColumn('departament_gestors.user_id', 'users.id')
+                                            ->where('departament_gestors.departament_id', $departamentId);
+                                    })
+                                    ->get();
+                                
+                                // Formatear los nombres para mostrar también el email
+                                $options = [];
+                                foreach ($usuariosGestores as $usuario) {
+                                    $options[$usuario->id] = "{$usuario->name} ({$usuario->email})";
+                                }
+                                
+                                return $options;
+                            })
+                            ->searchable()
+                            ->required(),
+                            
                         Toggle::make('gestor_principal')
                             ->label('Gestor Principal')
                             ->helperText('Si s\'activa, aquest usuari serà el gestor principal i els altres deixaran de ser-ho.')
                             ->default(false),
                     ])
-                    ->action(function (array $data, $record) {
+                    ->action(function (array $data) {
                         $departament = $this->getOwnerRecord();
+                        $userId = $data['user_id'];
                         
                         // Si es marca com principal, desprincipalitzar els altres
                         if ($data['gestor_principal'] ?? false) {
@@ -175,7 +195,7 @@ class GestorsRelationManager extends RelationManager
                         // Afegir el nou gestor
                         DB::table('departament_gestors')->insert([
                             'departament_id' => $departament->id,
-                            'user_id' => $record->id,
+                            'user_id' => $userId,
                             'gestor_principal' => $data['gestor_principal'] ?? false,
                             'created_at' => now(),
                             'updated_at' => now(),
@@ -183,8 +203,14 @@ class GestorsRelationManager extends RelationManager
 
                         // Actualitzar gestor_id per compatibilitat
                         if ($data['gestor_principal'] ?? false) {
-                            $departament->update(['gestor_id' => $record->id]);
+                            $departament->update(['gestor_id' => $userId]);
                         }
+                        
+                        // Mostrar notificación de éxito
+                        \Filament\Notifications\Notification::make()
+                            ->title('Gestor afegit correctament')
+                            ->success()
+                            ->send();
                     }),
             ])
             ->actions([
@@ -260,63 +286,128 @@ class GestorsRelationManager extends RelationManager
                         }
                     }),
                     
-                DetachAction::make()
+                Action::make('eliminar_gestor')
                     ->label('Eliminar')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
                     ->modalHeading('Eliminar Gestor del Departament')
                     ->modalDescription('Això eliminarà l\'usuari com a gestor d\'aquest departament.')
                     ->requiresConfirmation()
-                    ->before(function ($record) {
+                    ->action(function ($record) {
                         // Verificar si és l'últim gestor principal
+                        $departament = $this->getOwnerRecord();
                         $esPrincipal = DB::table('departament_gestors')
-                            ->where('departament_id', $this->getOwnerRecord()->id)
+                            ->where('departament_id', $departament->id)
                             ->where('user_id', $record->id)
                             ->where('gestor_principal', true)
                             ->exists();
                             
                         if ($esPrincipal) {
                             $gestorsPrincipals = DB::table('departament_gestors')
-                                ->where('departament_id', $this->getOwnerRecord()->id)
+                                ->where('departament_id', $departament->id)
                                 ->where('gestor_principal', true)
                                 ->count();
                                 
                             if ($gestorsPrincipals <= 1) {
-                                throw new \Exception('No es pot eliminar l\'últim gestor principal del departament.');
+                                \Filament\Notifications\Notification::make()
+                                    ->title('No es pot eliminar l\'\u00faltim gestor principal')
+                                    ->body('Aquest departament necessita almenys un gestor principal.')
+                                    ->danger()
+                                    ->send();
+                                return;
                             }
                         }
-                    })
-                    ->action(function ($record) {
+                        
+                        // Eliminar la relación
                         DB::table('departament_gestors')
-                            ->where('departament_id', $this->getOwnerRecord()->id)
+                            ->where('departament_id', $departament->id)
                             ->where('user_id', $record->id)
                             ->delete();
 
                         // Si era el gestor_id, actualitzar amb un altre principal
-                        if ($this->getOwnerRecord()->gestor_id == $record->id) {
+                        if ($departament->gestor_id == $record->id) {
                             $nouPrincipal = DB::table('departament_gestors')
-                                ->where('departament_id', $this->getOwnerRecord()->id)
+                                ->where('departament_id', $departament->id)
                                 ->where('gestor_principal', true)
                                 ->first();
                                 
-                            $this->getOwnerRecord()->update([
+                            $departament->update([
                                 'gestor_id' => $nouPrincipal?->user_id
                             ]);
                         }
+                        
+                        // Mostrar notificación de éxito
+                        \Filament\Notifications\Notification::make()
+                            ->title('Gestor eliminat correctament')
+                            ->success()
+                            ->send();
                     }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    DetachBulkAction::make()
+                    Tables\Actions\BulkAction::make('eliminar_seleccionats')
                         ->label('Eliminar Seleccionats')
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
                         ->modalHeading('Eliminar Gestors del Departament')
                         ->modalDescription('Això eliminarà els usuaris seleccionats com a gestors d\'aquest departament.')
                         ->requiresConfirmation()
-                        ->action(function ($records) {
+                        ->action(function (Collection $records) {
+                            $departament = $this->getOwnerRecord();
+                            
+                            // Verificar si s'està intentant eliminar tots els gestors principals
+                            $principalsSeleccionats = 0;
+                            $totalPrincipals = DB::table('departament_gestors')
+                                ->where('departament_id', $departament->id)
+                                ->where('gestor_principal', true)
+                                ->count();
+                                
+                            foreach ($records as $record) {
+                                $esPrincipal = DB::table('departament_gestors')
+                                    ->where('departament_id', $departament->id)
+                                    ->where('user_id', $record->id)
+                                    ->where('gestor_principal', true)
+                                    ->exists();
+                                    
+                                if ($esPrincipal) {
+                                    $principalsSeleccionats++;
+                                }
+                            }
+                            
+                            if ($principalsSeleccionats >= $totalPrincipals) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('No es poden eliminar tots els gestors principals')
+                                    ->body('Aquest departament necessita almenys un gestor principal.')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+                            
+                            // Eliminar els gestors seleccionats
                             foreach ($records as $record) {
                                 DB::table('departament_gestors')
-                                    ->where('departament_id', $this->getOwnerRecord()->id)
+                                    ->where('departament_id', $departament->id)
                                     ->where('user_id', $record->id)
                                     ->delete();
+                                    
+                                // Si era el gestor_id, actualitzar amb un altre principal
+                                if ($departament->gestor_id == $record->id) {
+                                    $nouPrincipal = DB::table('departament_gestors')
+                                        ->where('departament_id', $departament->id)
+                                        ->where('gestor_principal', true)
+                                        ->first();
+                                        
+                                    $departament->update([
+                                        'gestor_id' => $nouPrincipal?->user_id
+                                    ]);
+                                }
                             }
+                            
+                            // Mostrar notificación de éxito
+                            \Filament\Notifications\Notification::make()
+                                ->title('Gestors eliminats correctament')
+                                ->success()
+                                ->send();
                         }),
                 ]),
             ])

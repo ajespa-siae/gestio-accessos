@@ -92,6 +92,14 @@ class User extends Authenticatable implements LdapAuthenticatable, FilamentUser
             'departament_id'
         )->withPivot('gestor_principal')->withTimestamps();
     }
+    
+    /**
+     * Alias para departamentsGestionats para compatibilidad con Filament
+     */
+    public function departaments(): BelongsToMany
+    {
+        return $this->departamentsGestionats();
+    }
 
     // ===== MÈTODES LDAP =====
 
