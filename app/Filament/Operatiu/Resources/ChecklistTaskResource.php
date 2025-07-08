@@ -153,16 +153,27 @@ class ChecklistTaskResource extends Resource
                 TextColumn::make('nom')
                     ->searchable()
                     ->sortable()
+                    ->wrap() // Permitir que el texto se ajuste en varias líneas
                     ->label('Tasca'),
                     
                 TextColumn::make('checklistInstance.empleat.nom_complet')
                     ->searchable()
                     ->sortable()
+                    ->limit(20) // Truncar el texto a 20 caracteres
+                    ->tooltip(function (TextColumn $column): ?string {
+                        $state = $column->getState();
+                        return $state ? $state : null;
+                    }) // Mostrar el texto completo en un tooltip
                     ->label('Empleat'),
                     
                 TextColumn::make('usuariAssignat.name')
                     ->searchable()
                     ->sortable()
+                    ->limit(20) // Truncar el texto a 20 caracteres
+                    ->tooltip(function (TextColumn $column): ?string {
+                        $state = $column->getState();
+                        return $state ? $state : null;
+                    }) // Mostrar el texto completo en un tooltip
                     ->label('Assignada a'),
                     
                 BadgeColumn::make('estat')
@@ -176,7 +187,7 @@ class ChecklistTaskResource extends Resource
                     ->label('Estat'),
                     
                 TextColumn::make('data_limit')
-                    ->dateTime('d/m/Y H:i')
+                    ->dateTime('d/m/Y')
                     ->sortable()
                     ->label('Data Límit'),
                     
@@ -190,13 +201,10 @@ class ChecklistTaskResource extends Resource
             ])
             ->defaultSort('data_limit', 'asc')
             ->filters([
-                SelectFilter::make('rol_assignat')
-                    ->options([
-                        'it' => 'Equip IT',
-                        'rrhh' => 'Recursos Humans',
-                        'gestor' => 'Gestor',
-                    ])
-                    ->label('Filtrar per Rol'),
+                // Filtro para mostrar solo mis tareas asignadas
+                Filter::make('mis_tareas')
+                    ->label('Mostrar només les meves tasques')
+                    ->query(fn (Builder $query): Builder => $query->where('usuari_assignat_id', auth()->id())),
                     
                 SelectFilter::make('completada')
                     ->options([
@@ -218,9 +226,75 @@ class ChecklistTaskResource extends Resource
                     ->label('')
                     ->tooltip('Veure detalls'),
                     
-                Tables\Actions\EditAction::make()
+                // Acción para asignar usuario (reemplaza la acción de editar)
+                Tables\Actions\Action::make('assignar_usuari')
                     ->label('')
-                    ->tooltip('Editar'),
+                    ->icon('heroicon-o-user-plus')
+                    ->color('primary')
+                    ->visible(fn (ChecklistTask $record): bool => 
+                        !$record->usuari_assignat_id && 
+                        (auth()->user()->hasRole('admin') || 
+                         auth()->user()->hasRole($record->rol_assignat))
+                    )
+                    ->form([
+                        Select::make('usuari_assignat_id')
+                            ->label('Assignar a usuari')
+                            ->options(function (ChecklistTask $record) {
+                                // Obtener usuarios con el rol correspondiente a la tarea
+                                return \App\Models\User::query()
+                                    ->where('actiu', true)
+                                    ->whereHas('roles', function ($query) use ($record) {
+                                        $query->where('name', $record->rol_assignat);
+                                    })
+                                    ->orWhere('rol_principal', $record->rol_assignat) // Compatibilidad con sistema anterior
+                                    ->pluck('name', 'id');
+                            })
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                    ])
+                    ->action(function (ChecklistTask $record, array $data): void {
+                        $record->update([
+                            'usuari_assignat_id' => $data['usuari_assignat_id'],
+                            'data_assignacio' => now(),
+                        ]);
+                        
+                        // Notificar al usuario asignado
+                        \App\Jobs\NotificarTascaAssignada::dispatch($record);
+                        
+                        Filament\Notifications\Notification::make()
+                            ->title('Tasca assignada')
+                            ->success()
+                            ->send();
+                    })
+                    ->tooltip('Assignar usuari'),
+                    
+                // Acción para desasignar usuario
+                Tables\Actions\Action::make('desassignar_usuari')
+                    ->label('')
+                    ->icon('heroicon-o-user-minus')
+                    ->color('warning')
+                    ->visible(fn (ChecklistTask $record): bool => 
+                        $record->usuari_assignat_id && 
+                        !$record->completada &&
+                        (auth()->user()->hasRole('admin') || 
+                         auth()->user()->hasRole($record->rol_assignat))
+                    )
+                    ->requiresConfirmation()
+                    ->modalHeading('Desassignar usuari')
+                    ->modalDescription('Estàs segur que vols desassignar l\'usuari d\'aquesta tasca?')
+                    ->action(function (ChecklistTask $record): void {
+                        $record->update([
+                            'usuari_assignat_id' => null,
+                            'data_assignacio' => null,
+                        ]);
+                        
+                        Filament\Notifications\Notification::make()
+                            ->title('Usuari desassignat')
+                            ->success()
+                            ->send();
+                    })
+                    ->tooltip('Desassignar usuari'),
                     
                 Tables\Actions\Action::make('completar')
                     ->label('')
@@ -267,6 +341,7 @@ class ChecklistTaskResource extends Resource
         return [
             'index' => Pages\ListChecklistTasks::route('/'),
             'create' => Pages\CreateChecklistTask::route('/create'),
+            'view' => Pages\ViewChecklistTask::route('/{record}'),
             'edit' => Pages\EditChecklistTask::route('/{record}/edit'),
         ];
     }    

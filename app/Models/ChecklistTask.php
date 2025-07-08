@@ -47,6 +47,11 @@ class ChecklistTask extends Model
                     dispatch(new \App\Jobs\NotificarTascaCompletada($task));
                 }
             }
+            
+            // Cuando se asigna un usuario a la tarea
+            if ($task->wasChanged('usuari_assignat_id') && $task->usuari_assignat_id) {
+                dispatch(new \App\Jobs\NotificarTascaAssignada($task));
+            }
         });
     }
 
