@@ -1,14 +1,12 @@
 <?php
 
-namespace App\Filament\Operatiu\Livewire;
+namespace App\Livewire;
 
 use App\Models\Notificacio;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
-use Livewire\Attributes\Computed;
 
-#[\Livewire\Attributes\Lazy]
 class NotificacionsMenu extends Component
 {
     public $notificacions = [];

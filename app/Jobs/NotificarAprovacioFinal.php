@@ -49,10 +49,19 @@ class NotificarAprovacioFinal implements ShouldQueue
                 );
             }
 
-            // Notificar usuaris RRHH
-            $usuarisRRHH = User::where('rol_principal', 'rrhh')
-                             ->where('actiu', true)
-                             ->get();
+            // Notificar usuaris RRHH utilizando Shield
+            $usuarisRRHH = User::whereHas('roles', function($query) {
+                    $query->where('name', 'rrhh');
+                })
+                ->where('actiu', true)
+                ->get();
+                
+            // Fallback: si no hay usuarios con rol 'rrhh' en Shield, intentar con el campo rol_principal
+            if ($usuarisRRHH->isEmpty()) {
+                $usuarisRRHH = User::where('rol_principal', 'rrhh')
+                                 ->where('actiu', true)
+                                 ->get();
+            }
 
             foreach ($usuarisRRHH as $usuariRRHH) {
                 Notificacio::crear(
@@ -65,10 +74,19 @@ class NotificarAprovacioFinal implements ShouldQueue
                 );
             }
 
-            // Notificar usuaris IT
-            $usuarisIT = User::where('rol_principal', 'it')
-                           ->where('actiu', true)
-                           ->get();
+            // Notificar usuaris IT utilizando Shield
+            $usuarisIT = User::whereHas('roles', function($query) {
+                    $query->where('name', 'it');
+                })
+                ->where('actiu', true)
+                ->get();
+                
+            // Fallback: si no hay usuarios con rol 'it' en Shield, intentar con el campo rol_principal
+            if ($usuarisIT->isEmpty()) {
+                $usuarisIT = User::where('rol_principal', 'it')
+                               ->where('actiu', true)
+                               ->get();
+            }
 
             foreach ($usuarisIT as $usuariIT) {
                 $sistemes = $this->solicitud->sistemesSolicitats->map(function($ss) {

@@ -21,7 +21,21 @@ class TasquesPendentsTable extends BaseWidget
             ->limit(5);
 
         if (!$user->hasRole('admin')) {
-            $query->where('usuari_assignat_id', $user->id);
+            $query->where(function($q) use ($user) {
+                // Tareas asignadas específicamente al usuario (compatibilidad con sistema anterior)
+                $q->where('usuari_assignat_id', $user->id);
+                
+                // O tareas con el rol asignado que coincide con alguno de los roles del usuario
+                if ($user->hasRole('it')) {
+                    $q->orWhere('rol_assignat', 'it');
+                }
+                if ($user->hasRole('rrhh')) {
+                    $q->orWhere('rol_assignat', 'rrhh');
+                }
+                if ($user->hasRole('gestor')) {
+                    $q->orWhere('rol_assignat', 'gestor');
+                }
+            });
         }
 
         return $table
@@ -65,7 +79,8 @@ class TasquesPendentsTable extends BaseWidget
                     })
                     ->visible(fn ($record) => 
                         $record->usuari_assignat_id === Auth::id() || 
-                        Auth::user()->hasRole('admin')
+                        Auth::user()->hasRole('admin') ||
+                        (Auth::user()->hasRole($record->rol_assignat))
                     ),
             ]);
     }

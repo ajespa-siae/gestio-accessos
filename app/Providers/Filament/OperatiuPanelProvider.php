@@ -92,7 +92,7 @@ class OperatiuPanelProvider extends PanelProvider
             ->darkMode(true) // Habilitar el modo oscuro
             ->renderHook(
                 'panels::global-search.after',
-                fn (): string => Blade::render('@livewire(\'App\\Filament\\Operatiu\\Livewire\\NotificacionsMenu\')')
+                fn (): string => Blade::render('@livewire("\\App\\Livewire\\NotificacionsMenu")')
             );
     }
 }

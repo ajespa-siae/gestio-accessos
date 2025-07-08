@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ChecklistInstance;
 use App\Models\User;
 use App\Models\Notificacio;
+use App\Mail\NovaChecklistMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class NotificarNovaChecklistIT implements ShouldQueue
 {
@@ -24,9 +26,20 @@ class NotificarNovaChecklistIT implements ShouldQueue
     public function handle(): void
     {
         try {
-            $usuarisIT = User::where('rol_principal', 'it')
-                           ->where('actiu', true)
-                           ->get();
+            // Obtener usuarios con rol 'it' usando el sistema de roles de Shield
+            $usuarisIT = User::whereHas('roles', function($query) {
+                    $query->where('name', 'it');
+                })
+                ->where('actiu', true)
+                ->get();
+                
+            // Fallback: si no hay usuarios con rol 'it' en Shield, intentar con el campo rol_principal
+            if ($usuarisIT->isEmpty()) {
+                Log::info('No se encontraron usuarios con rol "it" en Shield, intentando con rol_principal');
+                $usuarisIT = User::where('rol_principal', 'it')
+                               ->where('actiu', true)
+                               ->get();
+            }
 
             if ($usuarisIT->isEmpty()) {
                 Log::warning('No hi ha usuaris IT actius per notificar');
@@ -47,12 +60,16 @@ class NotificarNovaChecklistIT implements ShouldQueue
                     $empleat->identificador_unic
                 );
 
-                // TODO: Enviar email quan estigui configurat
-                /*
-                Mail::to($usuariIT->email)->send(
-                    new NovaChecklistMail($this->checklistInstance)
-                );
-                */
+                // Enviar email de notificación
+                try {
+                    Mail::to($usuariIT->email)->send(
+                        new NovaChecklistMail($this->checklistInstance)
+                    );
+                    Log::info("Email enviado a {$usuariIT->email} para checklist {$tipus}");
+                } catch (\Exception $emailError) {
+                    Log::error("Error al enviar email a {$usuariIT->email}: " . $emailError->getMessage());
+                    // Continuamos con el siguiente usuario aunque falle el email
+                }
             }
 
             Log::info("Notificacions enviades a {$usuarisIT->count()} usuaris IT per checklist {$tipus}");

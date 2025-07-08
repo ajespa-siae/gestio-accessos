@@ -44,10 +44,19 @@ class ProcessarChecklistCompletada implements ShouldQueue
     {
         $empleat = $this->checklistInstance->empleat;
 
-        // Notificar RRHH que l'onboarding està completat
-        $usuarisRRHH = User::where('rol_principal', 'rrhh')
-                         ->where('actiu', true)
-                         ->get();
+        // Notificar RRHH que l'onboarding està completat utilizando Shield
+        $usuarisRRHH = User::whereHas('roles', function($query) {
+                $query->where('name', 'rrhh');
+            })
+            ->where('actiu', true)
+            ->get();
+            
+        // Fallback: si no hay usuarios con rol 'rrhh' en Shield, intentar con el campo rol_principal
+        if ($usuarisRRHH->isEmpty()) {
+            $usuarisRRHH = User::where('rol_principal', 'rrhh')
+                             ->where('actiu', true)
+                             ->get();
+        }
 
         foreach ($usuarisRRHH as $usuariRRHH) {
             Notificacio::crear(
@@ -80,10 +89,19 @@ class ProcessarChecklistCompletada implements ShouldQueue
     {
         $empleat = $this->checklistInstance->empleat;
 
-        // Notificar RRHH que l'offboarding està completat
-        $usuarisRRHH = User::where('rol_principal', 'rrhh')
-                         ->where('actiu', true)
-                         ->get();
+        // Notificar RRHH que l'offboarding està completat utilizando Shield
+        $usuarisRRHH = User::whereHas('roles', function($query) {
+                $query->where('name', 'rrhh');
+            })
+            ->where('actiu', true)
+            ->get();
+            
+        // Fallback: si no hay usuarios con rol 'rrhh' en Shield, intentar con el campo rol_principal
+        if ($usuarisRRHH->isEmpty()) {
+            $usuarisRRHH = User::where('rol_principal', 'rrhh')
+                             ->where('actiu', true)
+                             ->get();
+        }
 
         foreach ($usuarisRRHH as $usuariRRHH) {
             Notificacio::crear(

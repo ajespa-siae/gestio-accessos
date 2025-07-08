@@ -72,19 +72,40 @@ class ProcessarSolicitudAprovada implements ShouldQueue
     
     private function trobarUsuariIT(int $departamentId): ?User
     {
-        // Prioritzar usuaris IT del mateix departament
-        $usuariIT = User::where('rol_principal', 'it')
-                       ->where('actiu', true)
-                       ->whereHas('departamentsGestionats', function ($query) use ($departamentId) {
-                           $query->where('departament_id', $departamentId);
-                       })
-                       ->first();
-        
-        // Si no en troba, agafar qualsevol usuari IT
+        // Prioritzar usuaris IT del mateix departament amb Shield
+        $usuariIT = User::whereHas('roles', function($query) {
+                $query->where('name', 'it');
+            })
+            ->where('actiu', true)
+            ->whereHas('departamentsGestionats', function ($query) use ($departamentId) {
+                $query->where('departament_id', $departamentId);
+            })
+            ->first();
+            
+        // Si no hi ha usuaris amb rol Shield, provar amb rol_principal
         if (!$usuariIT) {
             $usuariIT = User::where('rol_principal', 'it')
-                           ->where('actiu', true)
-                           ->first();
+                ->where('actiu', true)
+                ->whereHas('departamentsGestionats', function ($query) use ($departamentId) {
+                    $query->where('departament_id', $departamentId);
+                })
+                ->first();
+        }
+        
+        // Si no en troba, agafar qualsevol usuari IT amb Shield
+        if (!$usuariIT) {
+            $usuariIT = User::whereHas('roles', function($query) {
+                    $query->where('name', 'it');
+                })
+                ->where('actiu', true)
+                ->first();
+        }
+        
+        // Fallback: si no hi ha usuaris amb rol Shield, provar amb rol_principal
+        if (!$usuariIT) {
+            $usuariIT = User::where('rol_principal', 'it')
+                ->where('actiu', true)
+                ->first();
         }
         
         return $usuariIT;

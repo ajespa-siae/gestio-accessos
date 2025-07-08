@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Empleat;
+use App\Observers\EmpleatObserver;
 use App\View\Components\UserMenu;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
@@ -31,5 +33,8 @@ class AppServiceProvider extends ServiceProvider
             'panels::global-search.before',
             fn (): View => view('filament.components.global-search')
         );
+        
+        // Registrar el observador de Empleat
+        Empleat::observe(EmpleatObserver::class);
     }
 }

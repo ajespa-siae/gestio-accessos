@@ -34,10 +34,19 @@ class NotificarTascaCompletada implements ShouldQueue
             $empleat = $checklistInstance->empleat;
             $tipus = $checklistInstance->getTipusTemplate();
 
-            // Notificar usuaris RRHH
-            $usuarisRRHH = User::where('rol_principal', 'rrhh')
-                             ->where('actiu', true)
-                             ->get();
+            // Notificar usuaris RRHH utilizando Shield
+            $usuarisRRHH = User::whereHas('roles', function($query) {
+                    $query->where('name', 'rrhh');
+                })
+                ->where('actiu', true)
+                ->get();
+                
+            // Fallback: si no hay usuarios con rol 'rrhh' en Shield, intentar con el campo rol_principal
+            if ($usuarisRRHH->isEmpty()) {
+                $usuarisRRHH = User::where('rol_principal', 'rrhh')
+                                  ->where('actiu', true)
+                                  ->get();
+            }
 
             foreach ($usuarisRRHH as $usuariRRHH) {
                 Notificacio::crear(

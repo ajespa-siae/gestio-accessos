@@ -23,9 +23,20 @@ class NotificarOffboardingIT implements ShouldQueue
     public function handle(): void
     {
         try {
-            $usuarisIT = User::where('rol_principal', 'it')
-                           ->where('actiu', true)
-                           ->get();
+            // Obtener usuarios con rol 'it' usando el sistema de roles de Shield
+            $usuarisIT = User::whereHas('roles', function($query) {
+                    $query->where('name', 'it');
+                })
+                ->where('actiu', true)
+                ->get();
+                
+            // Fallback: si no hay usuarios con rol 'it' en Shield, intentar con el campo rol_principal
+            if ($usuarisIT->isEmpty()) {
+                Log::info('No se encontraron usuarios con rol "it" en Shield, intentando con rol_principal');
+                $usuarisIT = User::where('rol_principal', 'it')
+                               ->where('actiu', true)
+                               ->get();
+            }
 
             if ($usuarisIT->isEmpty()) {
                 Log::warning('No hi ha usuaris IT actius per notificar offboarding');

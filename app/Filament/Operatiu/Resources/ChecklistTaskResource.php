@@ -41,13 +41,31 @@ class ChecklistTaskResource extends Resource
         return auth()->user()->hasRole('it') || auth()->user()->hasRole('admin');
     }
     
-    // Filtrar solo las tareas asignadas al usuario actual
+    // Filtrar tareas por rol del usuario o asignadas al usuario
     public static function getEloquentQuery(): Builder
     {
+        $user = auth()->user();
+        
         return parent::getEloquentQuery()
-            ->where('usuari_assignat_id', auth()->id())
-            ->orWhereHas('checklistInstance', function ($query) {
-                $query->where('empleat_id', auth()->user()->id);
+            ->where(function($query) use ($user) {
+                // Mostrar tareas donde el usuario está asignado específicamente (compatibilidad con sistema anterior)
+                $query->where('usuari_assignat_id', $user->id)
+                // O tareas con el rol asignado que coincide con alguno de los roles del usuario
+                ->orWhere(function($q) use ($user) {
+                    if ($user->hasRole('it')) {
+                        $q->where('rol_assignat', 'it');
+                    }
+                    if ($user->hasRole('rrhh')) {
+                        $q->orWhere('rol_assignat', 'rrhh');
+                    }
+                    if ($user->hasRole('gestor')) {
+                        $q->orWhere('rol_assignat', 'gestor');
+                    }
+                })
+                // O tareas relacionadas con el propio empleado
+                ->orWhereHas('checklistInstance', function ($q) use ($user) {
+                    $q->where('empleat_id', $user->id);
+                });
             });
     }
 
@@ -219,7 +237,12 @@ class ChecklistTaskResource extends Resource
                     ->action(function (ChecklistTask $record, array $data): void {
                         $record->completar(auth()->user(), $data['observacions'] ?? null);
                     })
-                    ->visible(fn (ChecklistTask $record): bool => !$record->completada)
+                    ->visible(fn (ChecklistTask $record): bool => 
+                        !$record->completada && 
+                        (auth()->user()->hasRole('admin') || 
+                         auth()->user()->hasRole($record->rol_assignat) || 
+                         $record->usuari_assignat_id === auth()->id())
+                    )
                     ->tooltip('Marcar com a completada'),
             ])
             ->bulkActions([

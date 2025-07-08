@@ -81,8 +81,8 @@ class ChecklistTemplate extends Model
                 'data_limit' => $tasca->dies_limit ? 
                     now()->addDays($tasca->dies_limit) : null,
                 'rol_assignat' => $tasca->rol_assignat,
-                // Mantenim usuari_assignat_id temporalment per compatibilitat
-                'usuari_assignat_id' => $this->trobarUsuariAssignat($tasca->rol_assignat, $empleat->departament_id)
+                // Ya no asignamos usuario específico, solo el rol
+                'usuari_assignat_id' => null
             ]);
         }
 
