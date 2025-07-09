@@ -31,12 +31,6 @@ class NotificacionsMenu extends Component
         if (!$userId) {
             return;
         }
-        
-        $this->notificacions = Notificacio::perUsuari($userId)
-            ->recents(30)
-            ->ordenatPerData()
-            ->limit(10)
-            ->get();
             
         $this->noLlegides = Notificacio::perUsuari($userId)
             ->noLlegides()
@@ -81,8 +75,33 @@ class NotificacionsMenu extends Component
         $this->carregarNotificacions();
     }
     
+
+    
+    public function carregarMesNotificacions()
+    {
+        $userId = Auth::id();
+        
+        if (!$userId) {
+            return;
+        }
+        
+        $this->notificacions = Notificacio::perUsuari($userId)
+            ->recents(30)
+            ->ordenatPerData()
+            ->get();
+    }
+    
     public function render()
     {
+        $userId = Auth::id();
+        
+        if ($userId) {
+            $this->notificacions = Notificacio::perUsuari($userId)
+                ->recents(30)
+                ->ordenatPerData()
+                ->get();
+        }
+        
         return view('filament.operatiu.livewire.notificacions-menu');
     }
 }
