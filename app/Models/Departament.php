@@ -124,7 +124,7 @@ class Departament extends Model
     /**
      * Establir una configuració
      */
-    public function setConfiguracio(string $clau, $valor, string $descripcio = null): void
+    public function setConfiguracio(string $clau, $valor, ?string $descripcio = null): void
     {
         $this->configuracions()->updateOrCreate(
             ['clau' => $clau],
