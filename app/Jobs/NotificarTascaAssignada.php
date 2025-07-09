@@ -40,7 +40,7 @@ class NotificarTascaAssignada implements ShouldQueue
                 $usuariAssignat->id,
                 "Nova tasca assignada",
                 "Tasca: {$this->task->nom}" . 
-                ($empleat ? "\nEmpleat: {$empleat->nom_complet}" : "") . 
+                ($empleat ? "\nEmpleat/da: {$empleat->nom_complet}" : "") . 
                 ($this->task->data_limit ? "\nData límit: " . $this->task->data_limit->format('d/m/Y') : ""),
                 'info',
                 "/operatiu/checklist-tasks/{$this->task->id}",

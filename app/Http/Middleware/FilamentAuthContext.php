@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 use Filament\Facades\Filament;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class FilamentAuthContext
 {
@@ -22,6 +23,7 @@ class FilamentAuthContext
         // Intentar obtener el usuario de diferentes fuentes
         $userId = null;
         $username = null;
+        $user = null;
         
         // 1. Intentar obtener el usuario de Auth facade
         if (Auth::check()) {
@@ -58,12 +60,38 @@ class FilamentAuthContext
                 ]);
             }
         }
+        // 4. Intentar obtener el usuario de la sesión auth_user_id
+        else if (session()->has('auth_user_id')) {
+            $userId = session('auth_user_id');
+            $user = User::find($userId);
+            
+            if ($user) {
+                $username = $user->username;
+                Log::debug('FilamentAuthContext: Usuario obtenido de la sesión auth_user_id', [
+                    'user_id' => $userId,
+                    'username' => $username,
+                ]);
+            }
+        }
         
-        // Si se encontró un usuario, guardarlo en la sesión
+        // Si se encontró un usuario, guardarlo en la sesión y configurar Auth
         if ($userId) {
             session(['auth_user_id' => $userId]);
             
-            Log::info('FilamentAuthContext: Usuario guardado en sesión', [
+            // Si el usuario no está autenticado en Auth, autenticarlo
+            if (!Auth::check()) {
+                Auth::login($user);
+                Log::info('FilamentAuthContext: Usuario autenticado en Auth', [
+                    'user_id' => $userId,
+                    'username' => $username,
+                ]);
+            }
+            
+            // Establecer el usuario actual para el contexto de la base de datos
+            // Esto es útil para modelos que requieren el ID del usuario autenticado
+            DB::statement("SET LOCAL gestor_rrhh.current_user_id = ?;", [$userId]);
+            
+            Log::info('FilamentAuthContext: Usuario guardado en sesión y contexto DB', [
                 'user_id' => $userId,
                 'username' => $username,
             ]);

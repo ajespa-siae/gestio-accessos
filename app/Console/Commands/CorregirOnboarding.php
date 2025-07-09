@@ -123,7 +123,7 @@ class CorregirOnboarding extends Command
                 \App\Models\Notificacio::crear(
                     $usuariIT->id,
                     "Nova checklist onboarding assignada",
-                    "Empleat: {$empleat->nom_complet} ({$empleat->departament->nom})",
+                    "Empleat/da: {$empleat->nom_complet} ({$empleat->departament->nom})",
                     'info',
                     "/admin/checklist-instances/{$instance->id}",
                     $empleat->identificador_unic
@@ -132,7 +132,7 @@ class CorregirOnboarding extends Command
             
             $this->info("Notificaciones enviadas a " . $usuarisIT->count() . " usuarios IT");
             
-            Log::info("Checklist d'onboarding creada manualment per l'empleat {$empleat->identificador_unic}");
+            Log::info("Checklist d'onboarding creada manualment per l'empleat/da {$empleat->identificador_unic}");
             
             return 0;
             

@@ -62,7 +62,7 @@
     <div class="content">
         <p>Hola,</p>
         
-        <p>S'ha creat una nova checklist de <strong>{{ $tipus }}</strong> per a l'empleat:</p>
+        <p>S'ha creat una nova checklist de <strong>{{ $tipus }}</strong> per a l'empleat/da:</p>
         
         <ul>
             <li><strong>Nom:</strong> {{ $empleat->nom_complet }}</li>

@@ -116,6 +116,8 @@ class SolicitudAccesResource extends Resource
                                     ->relationship('sistema', 'nom')
                                     ->searchable()
                                     ->required()
+                                    ->reactive()
+                                    ->afterStateUpdated(fn (callable $set) => $set('nivell_acces_id', null))
                                     ->label('Sistema'),
                                     
                                 Textarea::make('descripcio')
@@ -124,15 +126,21 @@ class SolicitudAccesResource extends Resource
                                     ->maxLength(500)
                                     ->columnSpanFull(),
                                     
-                                Select::make('nivell_acces')
+                                Select::make('nivell_acces_id')
                                     ->label('Nivell d\'Accés')
-                                    ->options([
-                                        'lectura' => 'Lectura',
-                                        'escriptura' => 'Escriptura',
-                                        'administracio' => 'Administració',
-                                    ])
-                                    ->required()
-                                    ->default('lectura'),
+                                    ->options(function (callable $get) {
+                                        $sistemaId = $get('sistema_id');
+                                        if (!$sistemaId) {
+                                            return [];
+                                        }
+                                        
+                                        return \App\Models\NivellAccesSistema::where('sistema_id', $sistemaId)
+                                            ->where('actiu', true)
+                                            ->orderBy('ordre')
+                                            ->pluck('nom', 'id');
+                                    })
+                                    ->searchable()
+                                    ->required(),
                             ])
                             ->columns(2)
                             ->itemLabel(fn (array $state): ?string => $state['sistema_id'] ?? null)
@@ -207,6 +215,12 @@ class SolicitudAccesResource extends Resource
                         'rebutjada' => '❌ Rebutjada',
                         'finalitzada' => '🏁 Finalitzada',
                     ]),
+                    
+                SelectFilter::make('empleat_id')
+                    ->label('Filtrar per empleat/da')
+                    ->relationship('empleatDestinatari', 'nom_complet')
+                    ->searchable()
+                    ->preload(),
                     
                 Filter::make('meves_sollicituds')
                     ->label('Les meves sol·licituds')

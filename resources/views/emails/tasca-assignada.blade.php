@@ -69,7 +69,7 @@
             @endif
             
             @if($empleat)
-                <p><strong>Empleat relacionat:</strong> {{ $empleat->nom_complet }}</p>
+                <p><strong>Empleat/da relacionat/da:</strong> {{ $empleat->nom_complet }}</p>
                 <p><strong>Departament:</strong> {{ $empleat->departament ? $empleat->departament->nom : 'No especificat' }}</p>
             @endif
             

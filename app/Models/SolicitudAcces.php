@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use App\Traits\Auditable;
 
 class SolicitudAcces extends Model
@@ -32,8 +33,30 @@ class SolicitudAcces extends Model
     protected static function booted()
     {
         static::creating(function ($solicitud) {
+            // Generar identificador único si no existe
             if (empty($solicitud->identificador_unic)) {
                 $solicitud->identificador_unic = self::generarIdentificadorUnic();
+            }
+            
+            // Asignar el usuario solicitante automáticamente si no está establecido
+            if (empty($solicitud->usuari_solicitant_id)) {
+                // Intentar obtener el usuario de diferentes fuentes
+                if (auth()->check()) {
+                    $solicitud->usuari_solicitant_id = auth()->id();
+                } elseif (session()->has('auth_user_id')) {
+                    $solicitud->usuari_solicitant_id = session('auth_user_id');
+                } else {
+                    // Intentar obtener el usuario del contexto de la base de datos
+                    $userId = DB::selectOne("SELECT current_setting('gestor_rrhh.current_user_id', true) as user_id");
+                    if ($userId && $userId->user_id) {
+                        $solicitud->usuari_solicitant_id = (int)$userId->user_id;
+                    }
+                }
+                
+                // Si no se pudo obtener el usuario, registrar un error
+                if (empty($solicitud->usuari_solicitant_id)) {
+                    \Illuminate\Support\Facades\Log::error('No se pudo determinar el usuario solicitante al crear una solicitud de acceso');
+                }
             }
         });
 

@@ -49,7 +49,7 @@ class NotificarOffboardingIT implements ShouldQueue
                 Notificacio::crear(
                     $usuariIT->id,
                     'Nova checklist d\'offboarding assignada',
-                    "Empleat de baixa: {$empleat->nom_complet} ({$empleat->departament->nom})\nData baixa: {$empleat->data_baixa->format('d/m/Y')}",
+                    "Empleat/da de baixa: {$empleat->nom_complet} ({$empleat->departament->nom})\nData baixa: {$empleat->data_baixa->format('d/m/Y')}",
                     'warning',
                     "/admin/checklist-instances/{$this->checklistInstance->id}",
                     $empleat->identificador_unic

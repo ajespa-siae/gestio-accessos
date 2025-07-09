@@ -54,7 +54,7 @@ class NotificarNovaChecklistIT implements ShouldQueue
                 Notificacio::crear(
                     $usuariIT->id,
                     "Nova checklist {$tipus} assignada",
-                    "Empleat: {$empleat->nom_complet} ({$empleat->departament->nom})",
+                    "Empleat/da: {$empleat->nom_complet} ({$empleat->departament->nom})",
                     'info',
                     "/admin/checklist-instances/{$this->checklistInstance->id}",
                     $empleat->identificador_unic

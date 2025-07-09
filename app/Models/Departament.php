@@ -97,6 +97,7 @@ class Departament extends Model
     /**
      * Usuarios que gestionan este departamento (relación inversa a departamentsGestionats)
      */
+    // Esta relación es redundante con gestors(), pero se mantiene por compatibilidad
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -397,9 +398,15 @@ class Departament extends Model
      */
     public function getGestorsActius()
     {
-        return $this->gestors()
-                    ->where('users.actiu', true)
-                    ->get();
+        // Usamos directamente la consulta a la base de datos para evitar problemas con las relaciones
+        $gestors = DB::table('departament_gestors')
+            ->where('departament_id', $this->id)
+            ->join('users', 'users.id', '=', 'departament_gestors.user_id')
+            ->where('users.actiu', true)
+            ->select('users.*', 'departament_gestors.gestor_principal')
+            ->get();
+            
+        return User::hydrate($gestors->toArray());
     }
 
     /**

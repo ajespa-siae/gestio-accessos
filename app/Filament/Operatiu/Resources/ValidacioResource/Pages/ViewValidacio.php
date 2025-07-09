@@ -13,12 +13,6 @@ class ViewValidacio extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make()
-                ->label('Editar')
-                ->visible(fn (): bool => 
-                    $this->record->estat === 'pendent' && 
-                    auth()->user()->hasRole('admin')
-                ),
                 
             Actions\Action::make('aprovar')
                 ->label('Aprovar')

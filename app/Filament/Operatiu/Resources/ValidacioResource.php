@@ -138,9 +138,8 @@ class ValidacioResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->url(fn (Validacio $record): string => 
-                        route('filament.operatiu.resources.solicitud-acces.edit', $record->solicitud_id)
-                    )
-                    ->openUrlInNewTab(),
+                        route('filament.operatiu.resources.validacios.view', $record)
+                    ),
                     
                 TextColumn::make('sistema.nom')
                     ->label('Sistema')
@@ -156,11 +155,6 @@ class ValidacioResource extends Resource
                         'primary' => 'individual',
                         'info' => 'grup',
                     ]),
-                    
-                TextColumn::make('validador.name')
-                    ->label('Validador')
-                    ->searchable()
-                    ->sortable(),
                     
                 BadgeColumn::make('estat')
                     ->label('Estat')
@@ -263,14 +257,6 @@ class ValidacioResource extends Resource
                         $record->estat === 'pendent' && 
                         $record->potValidar(auth()->user())
                     ),
-                    
-                Tables\Actions\EditAction::make()
-                    ->label('')
-                    ->tooltip('Editar')
-                    ->visible(fn (Validacio $record): bool => 
-                        $record->estat === 'pendent' && 
-                        auth()->user()->hasRole('admin')
-                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -295,5 +281,16 @@ class ValidacioResource extends Resource
             'view' => Pages\ViewValidacio::route('/{record}'),
             'edit' => Pages\EditValidacio::route('/{record}/edit'),
         ];
+    }
+    
+    // Deshabilitar la creación y edición de validaciones directamente
+    public static function canCreate(): bool
+    {
+        return auth()->user()->hasRole('admin');
+    }
+    
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false; // Deshabilitar la edición para todos los usuarios
     }
 }

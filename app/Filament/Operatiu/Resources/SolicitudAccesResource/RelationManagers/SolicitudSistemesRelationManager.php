@@ -34,7 +34,9 @@ class SolicitudSistemesRelationManager extends RelationManager
                     ->options(Sistema::pluck('nom', 'id'))
                     ->searchable()
                     ->required()
-                    ->disabled(fn ($record) => $record && $record->exists),
+                    ->disabled(fn ($record) => $record && $record->exists)
+                    ->reactive()
+                    ->afterStateUpdated(fn (callable $set) => $set('nivell_acces_id', null)),
                     
                 Textarea::make('descripcio')
                     ->label('Descripció de l\'accés')
@@ -42,15 +44,21 @@ class SolicitudSistemesRelationManager extends RelationManager
                     ->maxLength(500)
                     ->columnSpanFull(),
                     
-                Select::make('nivell_acces')
+                Select::make('nivell_acces_id')
                     ->label('Nivell d\'Accés')
-                    ->options([
-                        'lectura' => 'Lectura',
-                        'escriptura' => 'Escriptura',
-                        'administracio' => 'Administració',
-                    ])
-                    ->required()
-                    ->default('lectura'),
+                    ->options(function (callable $get) {
+                        $sistemaId = $get('sistema_id');
+                        if (!$sistemaId) {
+                            return [];
+                        }
+                        
+                        return \App\Models\NivellAccesSistema::where('sistema_id', $sistemaId)
+                            ->where('actiu', true)
+                            ->orderBy('ordre')
+                            ->pluck('nom', 'id');
+                    })
+                    ->searchable()
+                    ->required(),
             ]);
     }
 
@@ -69,19 +77,8 @@ class SolicitudSistemesRelationManager extends RelationManager
                     ->limit(50)
                     ->tooltip(fn ($record) => $record->descripcio),
                     
-                BadgeColumn::make('nivell_acces')
+                TextColumn::make('nivellAcces.nom')
                     ->label('Nivell d\'Accés')
-                    ->colors([
-                        'gray' => 'lectura',
-                        'info' => 'escriptura',
-                        'warning' => 'administracio',
-                    ])
-                    ->formatStateUsing(fn (string $state): string => match($state) {
-                        'lectura' => 'Lectura',
-                        'escriptura' => 'Escriptura',
-                        'administracio' => 'Administració',
-                        default => $state,
-                    })
                     ->sortable(),
                     
                 TextColumn::make('created_at')
@@ -103,9 +100,15 @@ class SolicitudSistemesRelationManager extends RelationManager
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn ($record) => $record->solicitudAcces->estat === 'pendent'),
+                    ->visible(function ($record) {
+                        // Verificar que solicitudAcces no sea nulo antes de acceder a estat
+                        return $record->solicitud && $record->solicitud->estat === 'pendent';
+                    }),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn ($record) => $record->solicitudAcces->estat === 'pendent'),
+                    ->visible(function ($record) {
+                        // Verificar que solicitudAcces no sea nulo antes de acceder a estat
+                        return $record->solicitud && $record->solicitud->estat === 'pendent';
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

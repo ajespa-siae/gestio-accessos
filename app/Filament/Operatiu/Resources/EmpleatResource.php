@@ -29,9 +29,9 @@ class EmpleatResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-user-group';
     protected static ?string $navigationGroup = 'Gestió RRHH';
-    protected static ?string $modelLabel = 'Empleat';
-    protected static ?string $pluralModelLabel = 'Empleats';
-    protected static ?string $navigationLabel = 'Empleats';
+    protected static ?string $modelLabel = 'Empleat/da';
+    protected static ?string $pluralModelLabel = 'Empleats/des';
+    protected static ?string $navigationLabel = 'Empleats/des';
     
     // Métodos personalizados para asegurar que los usuarios con rol RRHH puedan acceder
     // Esto combina la verificación de permisos de Shield con la verificación del rol operativo
@@ -239,7 +239,8 @@ class EmpleatResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make()
                     ->label('')
-                    ->tooltip('Veure detalls'),
+                    ->tooltip('Veure detalls')
+                    ->url(fn (Empleat $record): string => static::getUrl('view', ['record' => $record])),
                 
                 Tables\Actions\EditAction::make()
                     ->label('')
@@ -285,6 +286,7 @@ class EmpleatResource extends Resource
         return [
             'index' => Pages\ListEmpleats::route('/'),
             'create' => Pages\CreateEmpleat::route('/create'),
+            'view' => Pages\ViewEmpleat::route('/{record}'),
             'edit' => Pages\EditEmpleat::route('/{record}/edit'),
         ];
     }

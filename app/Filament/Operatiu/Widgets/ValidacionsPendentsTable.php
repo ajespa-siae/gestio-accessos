@@ -28,6 +28,9 @@ class ValidacionsPendentsTable extends BaseWidget
 
         return $table
             ->query($query)
+            ->paginated()
+            ->defaultPaginationPageOption(5)
+            ->paginationPageOptions([5, 10, 25, 50])
             ->columns([
                 Tables\Columns\TextColumn::make('solicitud.identificador_unic')
                     ->label('Sol·licitud')

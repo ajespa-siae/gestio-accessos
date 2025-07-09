@@ -47,8 +47,13 @@ class NotificarValidadorsPendents implements ShouldQueue
     
     private function notificarGrupValidadors($validacio): void
     {
-        $gestorsIds = json_decode($validacio->grup_validadors_ids, true);
-        if (!$gestorsIds) {
+        // Manejar el campo grup_validadors_ids que puede ser un array o una cadena JSON
+        $gestorsIds = $validacio->grup_validadors_ids;
+        if (is_string($gestorsIds)) {
+            $gestorsIds = json_decode($gestorsIds, true);
+        }
+        
+        if (empty($gestorsIds)) {
             Log::warning("No hi ha gestors configurats per validació grup {$validacio->id}");
             return;
         }
@@ -70,17 +75,17 @@ class NotificarValidadorsPendents implements ShouldQueue
         // Personalitzar missatge segons tipus
         if ($tipus === 'grup') {
             $titol = 'Nova sol·licitud d\'accés per validar (grup)';
-            $missatge = "L'empleat {$empleat->nom_complet} sol·licita accés al sistema {$sistema->nom}. "
+            $missatge = "S'ha sol·licitat un accés per a l'empleat/da {$empleat->nom_complet} al sistema {$sistema->nom}. "
                       . "Qualsevol gestor del vostre departament pot validar aquesta sol·licitud.";
         } else {
             $titol = 'Nova sol·licitud d\'accés per validar';
-            $missatge = "L'empleat {$empleat->nom_complet} sol·licita accés al sistema {$sistema->nom}";
+            $missatge = "S'ha sol·licitat un accés per a l'empleat/da {$empleat->nom_complet} al sistema {$sistema->nom}";
         }
         
         // Email (si està configurat)
         if ($validador->email) {
             try {
-                // Mail::to($validador->email)->send(new SolicitudPendentMail($this->solicitud, $validacio));
+                Mail::to($validador->email)->send(new \App\Mail\SolicitudPendentMail($this->solicitud, $validacio));
                 Log::info("Email enviat a {$validador->email} per validació de {$sistema->nom}");
             } catch (\Exception $e) {
                 Log::error("Error enviant email a {$validador->email}: " . $e->getMessage());
