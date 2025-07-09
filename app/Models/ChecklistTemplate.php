@@ -89,7 +89,7 @@ class ChecklistTemplate extends Model
         return $instance;
     }
 
-    public function duplicar(string $nouNom = null): static
+    public function duplicar(?string $nouNom = null): static
     {
         $nouNom = $nouNom ?: $this->nom . ' (Còpia)';
         

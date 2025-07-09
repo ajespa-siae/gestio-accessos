@@ -138,7 +138,7 @@ class Validacio extends Model
     // METHODS VALIDACIÓ (MILLORATS)
     // ================================
 
-    public function aprovar(User $validador, string $observacions = null): void
+    public function aprovar(User $validador, ?string $observacions = null): void
     {
         if (!$this->potValidar($validador)) {
             throw new \Exception("L'usuari {$validador->name} no pot validar aquesta sol·licitud");

@@ -85,7 +85,7 @@ class Empleat extends Model
     }
 
     // Methods
-    public function donarBaixa(string $observacions = null): void
+    public function donarBaixa(?string $observacions = null): void
     {
         $this->update([
             'estat' => 'baixa',

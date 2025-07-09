@@ -97,7 +97,7 @@ class Sistema extends Model
     }
 
     // MANTENIM per compatibilitat amb el nom anterior (deprecated)
-    public function getValidadorsPerDepartament(int $departamentId = null): Collection
+    public function getValidadorsPerDepartament(?int $departamentId = null): Collection
     {
         return $this->getValidadorsPerSolicitud();
     }
@@ -113,7 +113,7 @@ class Sistema extends Model
     }
 
     // MÈTODES ACTUALITZATS per crear validadors
-    public function afegirValidadorEspecific(User $validador, int $ordre = null, bool $requerit = true): SistemaValidador
+    public function afegirValidadorEspecific(User $validador, ?int $ordre = null, bool $requerit = true): SistemaValidador
     {
         $ordre = $ordre ?? ($this->sistemaValidadors()->max('ordre') + 1);
         
@@ -127,7 +127,7 @@ class Sistema extends Model
         ]);
     }
 
-    public function afegirValidadorGestorDepartament(Departament $departament, int $ordre = null, bool $requerit = true): SistemaValidador
+    public function afegirValidadorGestorDepartament(Departament $departament, ?int $ordre = null, bool $requerit = true): SistemaValidador
     {
         $ordre = $ordre ?? ($this->sistemaValidadors()->max('ordre') + 1);
         

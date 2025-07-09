@@ -321,7 +321,7 @@ class SolicitudAcces extends Model
     /**
      * Processar validació (aprovar o rebutjar) per un usuari
      */
-    public function processarValidacio(User $user, int $validacioId, string $accio, string $observacions = null): bool
+    public function processarValidacio(User $user, int $validacioId, string $accio, ?string $observacions = null): bool
     {
         $validacio = $this->validacions()->find($validacioId);
         
