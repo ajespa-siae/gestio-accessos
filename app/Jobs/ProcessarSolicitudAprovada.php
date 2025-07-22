@@ -26,14 +26,11 @@ class ProcessarSolicitudAprovada implements ShouldQueue
         Log::info("Processant sol·licitud aprovada: {$this->solicitud->identificador_unic}");
         
         foreach ($this->solicitud->sistemesSolicitats as $sistemaSol) {
-            $this->crearTascaIT($sistemaSol);
+            $this->crearTascaPerSistema($sistemaSol);
         }
         
-        // Actualitzar estat final
-        $this->solicitud->update([
-            'estat' => 'finalitzada',
-            'data_finalitzacio' => now()
-        ]);
+        // Mantenir estat 'aprovada' fins que totes les tasques estiguin completades
+        // L'estat canviarà a 'finalitzada' quan es completin totes les tasques
         
         // Notificar aprovació final
         NotificarAprovacioFinal::dispatch($this->solicitud);
@@ -41,35 +38,33 @@ class ProcessarSolicitudAprovada implements ShouldQueue
         Log::info("Sol·licitud processada: {$this->solicitud->identificador_unic}");
     }
     
-    private function crearTascaIT($sistemaSol): void
+    private function crearTascaPerSistema($sistemaSol): void
     {
         $sistema = $sistemaSol->sistema;
         $nivell = $sistemaSol->nivellAcces;
         $empleat = $this->solicitud->empleatDestinatari;
         
-        // Buscar usuari IT per assignar tasca
-        $usuariIT = $this->trobarUsuariIT($empleat->departament_id);
-        
-        if (!$usuariIT) {
-            Log::warning("No s'ha trobat usuari IT per assignar tasca de {$sistema->nom}");
-            return;
-        }
+        // Obtenir el rol gestor del sistema
+        $rolGestor = $sistema->rol_gestor_defecte ?? 'it';
         
         ChecklistTask::create([
             'checklist_instance_id' => null, // Tasca independent, no vinculada a checklist
+            'solicitud_acces_id' => $this->solicitud->id, // Relació directa amb la sol·licitud
             'nom' => "Assignar accés: {$sistema->nom}",
             'descripcio' => "Nivell d'accés: {$nivell->nom}\nEmpleat: {$empleat->nom_complet}\nDepartament: {$empleat->departament->nom}",
             'ordre' => 1,
             'obligatoria' => true,
             'completada' => false,
             'data_assignacio' => now(),
-            'usuari_assignat_id' => $usuariIT->id,
+            'usuari_assignat_id' => null, // Assignació manual posterior
+            'rol_assignat' => $rolGestor,
             'observacions' => "Sol·licitud: {$this->solicitud->identificador_unic}"
         ]);
         
-        Log::info("Tasca IT creada per {$sistema->nom} assignada a {$usuariIT->name}");
+        Log::info("Tasca per {$sistema->nom} assignada al rol {$rolGestor} (notificació automàtica)");
     }
     
+
     private function trobarUsuariIT(int $departamentId): ?User
     {
         // Prioritzar usuaris IT del mateix departament amb Shield

@@ -18,6 +18,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Placeholder;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -45,7 +46,7 @@ class ValidacioResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['solicitud.empleatDestinatari', 'validador', 'sistema']);
+            ->with(['solicitud.empleatDestinatari.departament', 'validador', 'sistema']);
             
         if (!auth()->user()->hasRole('admin')) {
             $query->where(function($q) {
@@ -69,6 +70,20 @@ class ValidacioResource extends Resource
                             ->searchable()
                             ->required()
                             ->disabled(fn ($record) => $record && $record->exists),
+                            
+                        Placeholder::make('empleat_destinatari')
+                            ->label('Empleat Destinatari')
+                            ->content(function ($record) {
+                                if (!$record || !$record->solicitud || !$record->solicitud->empleatDestinatari) {
+                                    return 'No disponible';
+                                }
+                                
+                                $empleat = $record->solicitud->empleatDestinatari;
+                                $departament = $empleat->departament ? ' - ' . $empleat->departament->nom : '';
+                                
+                                return $empleat->nom_complet . ' (' . $empleat->identificador_unic . ')' . $departament;
+                            })
+                            ->visible(fn ($record) => $record && $record->exists),
                             
                         Select::make('sistema_id')
                             ->label('Sistema')

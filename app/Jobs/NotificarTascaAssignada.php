@@ -78,7 +78,8 @@ class NotificarTascaAssignada implements ShouldQueue
             
             Mail::send('emails.tasca-assignada', $data, function ($message) use ($usuari, $task) {
                 $message->to($usuari->email)
-                    ->subject("[SIAE] Nova tasca assignada: {$task->nom}");
+                    ->subject("[SIAE] Nova tasca assignada: {$task->nom}")
+                    ->from(config('mail.from.address'), config('mail.from.name'));
             });
             
             Log::info("Correo enviado a {$usuari->email} por tarea asignada: {$task->nom}");

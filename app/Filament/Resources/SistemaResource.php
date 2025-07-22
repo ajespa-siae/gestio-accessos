@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -59,6 +60,20 @@ class SistemaResource extends Resource
                             ->rows(3)
                             ->columnSpanFull(),
                             
+                        Select::make('rol_gestor_defecte')
+                            ->label('Rol Gestor per Defecte')
+                            ->options([
+                                'it' => 'IT',
+                                'rrhh' => 'Recursos Humans',
+                                'seguretat' => 'Seguretat',
+                                'administracio' => 'Administració',
+                                'gestor' => 'Gestor',
+                                'supervisor' => 'Supervisor',
+                            ])
+                            ->default('it')
+                            ->required()
+                            ->helperText('Rol que gestionarà les tasques quan s\'aprovi una sol·licitud d\'accés a aquest sistema'),
+                            
                         Toggle::make('actiu')
                             ->default(true)
                             ->helperText('Sistema disponible per sol·licituds d\'accés'),
@@ -100,6 +115,26 @@ class SistemaResource extends Resource
                     ->counts('departaments')
                     ->color('success')
                     ->icon('heroicon-o-building-office'),
+                    
+                BadgeColumn::make('rol_gestor_defecte')
+                    ->label('Rol Gestor')
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'it' => 'IT',
+                        'rrhh' => 'RRHH',
+                        'seguretat' => 'Seguretat',
+                        'administracio' => 'Admin',
+                        'gestor' => 'Gestor',
+                        'supervisor' => 'Supervisor',
+                        default => ucfirst($state),
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'it' => 'info',
+                        'rrhh' => 'success',
+                        'seguretat' => 'danger',
+                        'administracio' => 'warning',
+                        default => 'gray',
+                    })
+                    ->icon('heroicon-o-user-group'),
                     
                 IconColumn::make('actiu')
                     ->boolean()

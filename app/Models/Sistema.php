@@ -18,7 +18,7 @@ class Sistema extends Model
     protected $table = 'sistemes';
 
     protected $fillable = [
-        'nom', 'descripcio', 'actiu'
+        'nom', 'descripcio', 'actiu', 'rol_gestor_defecte'
     ];
 
     protected $casts = [

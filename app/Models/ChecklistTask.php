@@ -14,6 +14,7 @@ class ChecklistTask extends Model
 
     protected $fillable = [
         'checklist_instance_id',
+        'solicitud_acces_id',
         'nom',
         'descripcio',
         'ordre',
@@ -39,12 +40,40 @@ class ChecklistTask extends Model
     // Model Events
     protected static function booted()
     {
+        static::created(function ($task) {
+            // Notificar quan es crea una tasca assignada a un rol (sense usuari específic)
+            if ($task->rol_assignat && !$task->usuari_assignat_id) {
+                dispatch(new \App\Jobs\NotificarTascaAssignadaRol($task));
+            }
+        });
+        
         static::updated(function ($task) {
             if ($task->wasChanged('completada')) {
-                $task->checklistInstance->actualitzarEstat();
+                // Si és una tasca de checklist, actualitzar l'estat del checklist
+                if ($task->checklistInstance) {
+                    $task->checklistInstance->actualitzarEstat();
+                }
                 
                 if ($task->completada) {
                     dispatch(new \App\Jobs\NotificarTascaCompletada($task));
+                    
+                    // Verificar si aquesta tasca està relacionada amb una sol·licitud d'accés
+                    if ($task->solicitud_acces_id) {
+                        $solicitud = $task->solicitudAcces;
+                        if ($solicitud && $solicitud->estat === 'aprovada') {
+                            if ($solicitud->totesLesTasquesCompletades()) {
+                                $solicitud->update([
+                                    'estat' => 'finalitzada',
+                                    'data_finalitzacio' => now()
+                                ]);
+                                
+                                // Notificar l'usuari que va crear la sol·licitud
+                                dispatch(new \App\Jobs\NotificarSolicitudFinalitzada($solicitud));
+                                
+                                \Log::info("Sol·licitud {$solicitud->identificador_unic} finalitzada automàticament i notificació enviada");
+                            }
+                        }
+                    }
                 }
             }
             
@@ -69,6 +98,11 @@ class ChecklistTask extends Model
     public function usuariCompletat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuari_completat_id');
+    }
+
+    public function solicitudAcces(): BelongsTo
+    {
+        return $this->belongsTo(SolicitudAcces::class, 'solicitud_acces_id');
     }
 
     // Scopes

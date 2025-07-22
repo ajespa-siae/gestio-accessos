@@ -107,6 +107,11 @@ class SolicitudAcces extends Model
         return $this->hasMany(Validacio::class, 'solicitud_id')->where('estat', 'rebutjada');
     }
 
+    public function tasques(): HasMany
+    {
+        return $this->hasMany(ChecklistTask::class, 'solicitud_acces_id');
+    }
+
     // Scopes
     public function scopePerEstat(Builder $query, string $estat): Builder
     {
@@ -452,6 +457,29 @@ class SolicitudAcces extends Model
     {
         return $this->estat === 'aprovada' && 
                $this->sistemesSolicitats()->where('aprovat', false)->count() === 0;
+    }
+
+    /**
+     * Verificar si totes les tasques relacionades amb aquesta sol·licitud estan completades
+     */
+    public function totesLesTasquesCompletades(): bool
+    {
+        if ($this->estat !== 'aprovada') {
+            return false;
+        }
+        
+        // Buscar tasques directament relacionades amb aquesta sol·licitud
+        $tasquesRelacionades = $this->tasques;
+        
+        // Si no hi ha tasques relacionades, no es pot finalitzar
+        if ($tasquesRelacionades->isEmpty()) {
+            return false;
+        }
+        
+        // Verificar que totes les tasques estiguin completades
+        return $tasquesRelacionades->every(function ($tasca) {
+            return $tasca->completada;
+        });
     }
 
     /**

@@ -34,6 +34,7 @@ class SolicitudPendentMail extends Mailable
             : "Nova sol·licitud d'accés per validar - {$sistema->nom}";
         
         return $this->subject($subject)
+            ->from(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.solicitud-pendent', [
                 'empleat' => $empleat,
                 'sistema' => $sistema,
