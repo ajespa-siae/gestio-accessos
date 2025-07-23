@@ -19,4 +19,18 @@ class ListValidacios extends ListRecords
                 ->visible(fn (): bool => auth()->user()->hasRole('admin')),
         ];
     }
+    
+    public function mount(): void
+    {
+        parent::mount();
+        
+        // Establir el filtre per defecte si no hi ha filtres aplicats
+        if (empty($this->tableFilters)) {
+            $this->tableFilters = [
+                'estat' => [
+                    'value' => 'pendent',
+                ],
+            ];
+        }
+    }
 }
