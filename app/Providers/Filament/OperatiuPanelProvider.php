@@ -22,6 +22,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Support\Facades\Blade;
+use App\Http\Responses\Auth\OperatiuLoginResponse;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 
 class OperatiuPanelProvider extends PanelProvider
 {
@@ -95,4 +97,6 @@ class OperatiuPanelProvider extends PanelProvider
                 fn (): string => Blade::render('@livewire("\\App\\Livewire\\NotificacionsMenu")')
             );
     }
+    
+
 }

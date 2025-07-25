@@ -10,6 +10,8 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Http\Responses\Auth\LoginResponse;
+use App\Http\Responses\Auth\OperatiuLoginResponse;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse as LoginResponseContract;
 use Filament\Pages\Auth\Login as BaseLogin;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
@@ -46,9 +48,14 @@ class Login extends BaseLogin
             ]);
     }
     
-    public function authenticate(): ?LoginResponse
+    public function authenticate(): ?LoginResponseContract
     {
         $data = $this->form->getState();
+        
+        \Log::info('Login Operatiu: Iniciando autenticación', [
+            'username' => $data['username'],
+            'ip' => request()->ip(),
+        ]);
         
         try {
             // Usar el autenticador LDAP personalizado
@@ -68,39 +75,21 @@ class Login extends BaseLogin
                 return null;
             }
 
-            // Verificar si el usuario tiene acceso al panel operativo
-            if ($user->hasAnyRole(['rrhh', 'it', 'gestor', 'admin'])) {
-                // Iniciar sesión con el usuario autenticado
-                Auth::login($user, $data['remember'] ?? false);
-                
-                // Regenerar la sesión para prevenir fijación de sesión
-                request()->session()->regenerate();
-                
-                // Registrar el éxito de la autenticación
-                \Log::info('Login Operatiu: Autenticación exitosa', [
-                    'user_id' => $user->id,
-                    'username' => $user->username,
-                    'ip' => request()->ip(),
-                ]);
-                
-                // Redirigir según el rol del usuario
-                if ($user->hasRole('admin')) {
-                    return app(\Filament\Http\Responses\Auth\LoginResponse::class);
-                }
-                
-                // Si tiene algún rol operativo, redirigir al panel operativo
-                if ($user->hasAnyRole(['rrhh', 'it', 'gestor'])) {
-                    return app(\Filament\Http\Responses\Auth\LoginResponse::class);
-                }
-            }
+            // Iniciar sesión con el usuario autenticado
+            Auth::login($user, $data['remember'] ?? false);
             
-            // Cerrar sesión si no tiene roles válidos
-            Auth::logout();
-            \Log::warning('Login Operatiu: Usuario sin roles válidos', [
+            // Regenerar la sesión para prevenir fijación de sesión
+            request()->session()->regenerate();
+            
+            // Registrar el éxito de la autenticación
+            \Log::info('Login Operatiu: Autenticación exitosa', [
                 'user_id' => $user->id,
                 'username' => $user->username,
                 'ip' => request()->ip(),
             ]);
+            
+            // Retornar respuesta de login exitoso
+            return app(LoginResponse::class);
             
             // Si llegamos aquí, la autenticación falló
             $this->throwFailureValidationException();

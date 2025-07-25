@@ -122,9 +122,7 @@ class LdapFilamentAuthenticator
                 ]);
             }
             
-            // Autenticar al usuario en Laravel
-            Auth::login($databaseUser);
-            
+            // Retornar el usuario autenticado (sin hacer login automático)
             return $databaseUser;
         } catch (\Exception $e) {
             Log::error('LdapFilamentAuthenticator: Error general', [

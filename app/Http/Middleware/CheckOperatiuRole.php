@@ -19,6 +19,23 @@ class CheckOperatiuRole
         Log::channel('daily')->info('CheckOperatiuRole: Iniciando middleware para ruta: ' . $request->path());
         Log::channel('daily')->info('CheckOperatiuRole: Parámetros de la solicitud: ' . json_encode($request->all()));
         
+        // Excluir rutas de autenticación del middleware
+        $excludedPaths = [
+            'operatiu/login',
+            'operatiu/logout',
+            'operatiu/auth/login',
+            'operatiu/auth/logout',
+            'operatiu/auth/password-reset',
+        ];
+        
+        $currentPath = $request->path();
+        foreach ($excludedPaths as $excludedPath) {
+            if (str_starts_with($currentPath, $excludedPath)) {
+                Log::channel('daily')->info('CheckOperatiuRole: Ruta de autenticación excluida, pasando al siguiente middleware');
+                return $next($request);
+            }
+        }
+        
         $user = auth()->user();
         Log::channel('daily')->info('CheckOperatiuRole: Usuario autenticado: ' . ($user ? $user->email : 'No autenticado'));
         
@@ -51,7 +68,6 @@ class CheckOperatiuRole
         Log::channel('daily')->info('CheckOperatiuRole: Roles operativos del usuario: ' . implode(', ', $userRoles));
         Log::channel('daily')->info('CheckOperatiuRole: ¿Tiene rol operativo? ' . ($hasOperativeRole ? 'Sí' : 'No'));
         
-        $currentPath = $request->path();
         Log::channel('daily')->info('CheckOperatiuRole: Ruta actual: ' . $currentPath);
         
         // Si está intentando acceder al panel operativo
