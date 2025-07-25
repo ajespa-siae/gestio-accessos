@@ -10,6 +10,7 @@ use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Set;
 use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -82,6 +83,7 @@ class RoleResource extends Resource implements HasShieldPermissions
                             ]),
                     ]),
                 static::getShieldFormComponents(),
+                static::getMobilitatPermissionsSection(),
             ]);
     }
 
@@ -217,5 +219,125 @@ class RoleResource extends Resource implements HasShieldPermissions
     public static function canGloballySearch(): bool
     {
         return Utils::isResourceGloballySearchable() && count(static::getGloballySearchableAttributes()) && static::canViewAny();
+    }
+    
+    public static function getMobilitatPermissionsSection(): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Permisos de Mobilitat')
+            ->schema([
+                Forms\Components\Grid::make()
+                    ->schema([
+                        Forms\Components\Fieldset::make('RRHH - Processos de Mobilitat')
+                            ->schema([
+                                Forms\Components\CheckboxList::make('mobilitatRrhhPermissions')
+                                    ->label('')
+                                    ->options([
+                                        'view_any_process::mobilitat' => 'Veure tots els processos',
+                                        'view_process::mobilitat' => 'Veure procés',
+                                        'create_process::mobilitat' => 'Crear procés',
+                                        'update_process::mobilitat' => 'Editar procés',
+                                        'delete_process::mobilitat' => 'Eliminar procés',
+                                        'delete_any_process::mobilitat' => 'Eliminar qualsevol procés',
+                                        'force_delete_process::mobilitat' => 'Eliminar permanentment',
+                                        'force_delete_any_process::mobilitat' => 'Eliminar permanentment qualsevol',
+                                        'restore_process::mobilitat' => 'Restaurar procés',
+                                        'restore_any_process::mobilitat' => 'Restaurar qualsevol procés',
+                                        'replicate_process::mobilitat' => 'Replicar procés',
+                                        'reorder_process::mobilitat' => 'Reordenar processos',
+                                    ])
+                                    ->columns(2)
+                                    ->gridDirection('row')
+                                    ->bulkToggleable()
+                                    ->dehydrated(false)
+                                    ->afterStateHydrated(function (Forms\Components\CheckboxList $component, $state) {
+                                        $permissions = [];
+                                        $rolePermissions = $component->getRecord()?->permissions?->pluck('name')?->toArray() ?? [];
+                                        
+                                        foreach ($component->getOptions() as $permission => $label) {
+                                            if (in_array($permission, $rolePermissions)) {
+                                                $permissions[] = $permission;
+                                            }
+                                        }
+                                        
+                                        $component->state($permissions);
+                                    })
+                                    ->afterStateUpdated(function (Forms\Components\CheckboxList $component, $state, Forms\Set $set) {
+                                        // Sincronitzar amb el component principal de permisos
+                                        $currentPermissions = $set->get('permissions') ?? [];
+                                        
+                                        // Eliminar permisos de mobilitat RRHH existents
+                                        $currentPermissions = array_filter($currentPermissions, function($permission) {
+                                            return !str_starts_with($permission, 'view_any_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'view_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'create_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'update_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'delete_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'force_delete_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'restore_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'replicate_process::mobilitat') &&
+                                                   !str_starts_with($permission, 'reorder_process::mobilitat');
+                                        });
+                                        
+                                        // Afegir els nous permisos seleccionats
+                                        $currentPermissions = array_merge($currentPermissions, $state ?? []);
+                                        
+                                        $set('permissions', array_values($currentPermissions));
+                                    }),
+                            ]),
+                            
+                        Forms\Components\Fieldset::make('Gestors - Processos de Mobilitat')
+                            ->schema([
+                                Forms\Components\CheckboxList::make('mobilitatGestorPermissions')
+                                    ->label('')
+                                    ->options([
+                                        'view_any_process::mobilitat::gestor' => 'Veure processos (Gestor)',
+                                        'view_process::mobilitat::gestor' => 'Veure procés (Gestor)',
+                                        'create_process::mobilitat::gestor' => 'Crear procés (Gestor)',
+                                        'update_process::mobilitat::gestor' => 'Editar procés (Gestor)',
+                                        'delete_process::mobilitat::gestor' => 'Eliminar procés (Gestor)',
+                                        'delete_any_process::mobilitat::gestor' => 'Eliminar qualsevol (Gestor)',
+                                        'force_delete_process::mobilitat::gestor' => 'Eliminar permanentment (Gestor)',
+                                        'force_delete_any_process::mobilitat::gestor' => 'Eliminar permanentment qualsevol (Gestor)',
+                                        'restore_process::mobilitat::gestor' => 'Restaurar procés (Gestor)',
+                                        'restore_any_process::mobilitat::gestor' => 'Restaurar qualsevol (Gestor)',
+                                        'replicate_process::mobilitat::gestor' => 'Replicar procés (Gestor)',
+                                        'reorder_process::mobilitat::gestor' => 'Reordenar processos (Gestor)',
+                                    ])
+                                    ->columns(2)
+                                    ->gridDirection('row')
+                                    ->bulkToggleable()
+                                    ->dehydrated(false)
+                                    ->afterStateHydrated(function (Forms\Components\CheckboxList $component, $state) {
+                                        $permissions = [];
+                                        $rolePermissions = $component->getRecord()?->permissions?->pluck('name')?->toArray() ?? [];
+                                        
+                                        foreach ($component->getOptions() as $permission => $label) {
+                                            if (in_array($permission, $rolePermissions)) {
+                                                $permissions[] = $permission;
+                                            }
+                                        }
+                                        
+                                        $component->state($permissions);
+                                    })
+                                    ->afterStateUpdated(function (Forms\Components\CheckboxList $component, $state, Forms\Set $set) {
+                                        // Sincronitzar amb el component principal de permisos
+                                        $currentPermissions = $set->get('permissions') ?? [];
+                                        
+                                        // Eliminar permisos de mobilitat Gestor existents
+                                        $currentPermissions = array_filter($currentPermissions, function($permission) {
+                                            return !str_contains($permission, '::mobilitat::gestor');
+                                        });
+                                        
+                                        // Afegir els nous permisos seleccionats
+                                        $currentPermissions = array_merge($currentPermissions, $state ?? []);
+                                        
+                                        $set('permissions', array_values($currentPermissions));
+                                    }),
+                            ]),
+                    ])
+                    ->columns(2),
+            ])
+            ->collapsible()
+            ->collapsed(false);
     }
 }

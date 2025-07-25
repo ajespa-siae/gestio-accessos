@@ -55,22 +55,25 @@ class ChecklistTask extends Model
                 }
                 
                 if ($task->completada) {
+                    // Notificació de tasca completada de forma asíncrona
                     dispatch(new \App\Jobs\NotificarTascaCompletada($task));
                     
                     // Verificar si aquesta tasca està relacionada amb una sol·licitud d'accés
                     if ($task->solicitud_acces_id) {
                         $solicitud = $task->solicitudAcces;
                         if ($solicitud && $solicitud->estat === 'aprovada') {
+                            // Comprovar si totes les tasques estan completades de forma síncrona
                             if ($solicitud->totesLesTasquesCompletades()) {
+                                // Finalitzar sol·licitud immediatament per feedback instantani
                                 $solicitud->update([
                                     'estat' => 'finalitzada',
                                     'data_finalitzacio' => now()
                                 ]);
                                 
-                                // Notificar l'usuari que va crear la sol·licitud
+                                // Notificació final de forma asíncrona
                                 dispatch(new \App\Jobs\NotificarSolicitudFinalitzada($solicitud));
                                 
-                                \Log::info("Sol·licitud {$solicitud->identificador_unic} finalitzada automàticament i notificació enviada");
+                                \Log::info("Sol·licitud {$solicitud->identificador_unic} finalitzada automàticament amb feedback immediat");
                             }
                         }
                     }

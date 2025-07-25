@@ -153,6 +153,7 @@ return [
         App\Providers\LdapAuthServiceProvider::class,
         App\Providers\FilamentServiceProvider::class,
         App\Providers\MiddlewareServiceProvider::class,
+        App\Providers\MobilitatShieldServiceProvider::class,
     ]
 
 ];

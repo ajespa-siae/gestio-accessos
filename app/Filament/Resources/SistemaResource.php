@@ -107,8 +107,34 @@ class SistemaResource extends Resource
                 BadgeColumn::make('validadors_count')
                     ->label('Validadors')
                     ->counts('validadors')
-                    ->color('warning')
-                    ->icon('heroicon-o-shield-check'),
+                    ->color(fn (int $state): string => match (true) {
+                        $state === 0 => 'danger',
+                        $state <= 2 => 'warning',
+                        default => 'success',
+                    })
+                    ->icon('heroicon-o-users'),
+                    
+                BadgeColumn::make('elements_extra_count')
+                    ->label('Elements Extra')
+                    ->counts('elementsExtra')
+                    ->color(fn (int $state): string => $state > 0 ? 'info' : 'gray')
+                    ->icon('heroicon-o-puzzle-piece'),
+                    
+                BadgeColumn::make('tipus_formulari')
+                    ->label('Tipus Formulari')
+                    ->getStateUsing(fn (Sistema $record): string => 
+                        $record->teElementsComplexos() ? 'Híbrid' : 'Simple'
+                    )
+                    ->color(fn (string $state): string => match ($state) {
+                        'Híbrid' => 'warning',
+                        'Simple' => 'success',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'Híbrid' => 'heroicon-o-adjustments-horizontal',
+                        'Simple' => 'heroicon-o-document-text',
+                        default => 'heroicon-o-question-mark-circle',
+                    }),
                     
                 BadgeColumn::make('departaments_count')
                     ->label('Departaments')
@@ -200,6 +226,7 @@ class SistemaResource extends Resource
             RelationManagers\NivellsAccesRelationManager::class,
             RelationManagers\ValidadorsRelationManager::class,
             RelationManagers\DepartamentsRelationManager::class,
+            RelationManagers\ElementsExtraRelationManager::class,
         ];
     }
 

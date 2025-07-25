@@ -165,4 +165,38 @@ class Sistema extends Model
     {
         $this->afegirValidadorEspecific($validador, $ordre, $requerit);
     }
+
+    // ================================
+    // EXTENSIÓ HÍBRIDA - ELEMENTS EXTRA
+    // ================================
+
+    /**
+     * Elements extra per aquest sistema (nova funcionalitat híbrida)
+     */
+    public function elementsExtra(): HasMany
+    {
+        return $this->hasMany(SistemaElementExtra::class)->where('actiu', true)->orderBy('ordre');
+    }
+
+    /**
+     * Verificar si aquest sistema té elements complexos (híbrids)
+     */
+    public function teElementsComplexos(): bool
+    {
+        return $this->elementsExtra()->exists();
+    }
+
+    /**
+     * Obtenir configuració completa del sistema (simple + híbrid)
+     */
+    public function getConfiguracioCompleta(): array
+    {
+        return [
+            'sistema' => $this,
+            'te_elements_complexos' => $this->teElementsComplexos(),
+            'nivells_simples' => $this->nivellsAcces, // Funcionalitat actual
+            'elements_extra' => $this->elementsExtra, // Nova funcionalitat
+            'tipus_formulari' => $this->teElementsComplexos() ? 'mixt' : 'simple'
+        ];
+    }
 }

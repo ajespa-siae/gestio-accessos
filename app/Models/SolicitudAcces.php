@@ -20,9 +20,12 @@ class SolicitudAcces extends Model
         'empleat_destinatari_id',
         'usuari_solicitant_id',
         'estat',
+        'tipus',
+        'process_mobilitat_id',
         'justificacio',
         'data_finalitzacio',
-        'identificador_unic'
+        'identificador_unic',
+        'data_inici_necessaria'
     ];
 
     protected $casts = [
@@ -60,13 +63,19 @@ class SolicitudAcces extends Model
             }
         });
 
-        static::created(function ($solicitud) {
-            dispatch(new \App\Jobs\CrearValidacionsSolicitud($solicitud));
-        });
+        // Event created eliminat - ara es gestiona des de SolicitudSistema::created
 
         static::updated(function ($solicitud) {
             if ($solicitud->wasChanged('estat') && $solicitud->estat === 'aprovada') {
-                dispatch(new \App\Jobs\ProcessarSolicitudAprovada($solicitud));
+                // Processar sol·licitud aprovada de forma síncrona per feedback immediat
+                try {
+                    $job = new \App\Jobs\ProcessarSolicitudAprovada($solicitud);
+                    $job->handle();
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Error processant sol·licitud aprovada síncronament: {$e->getMessage()}");
+                    // Si falla la execució síncrona, intentar de forma asíncrona com a fallback
+                    dispatch(new \App\Jobs\ProcessarSolicitudAprovada($solicitud));
+                }
             }
         });
     }
@@ -110,6 +119,11 @@ class SolicitudAcces extends Model
     public function tasques(): HasMany
     {
         return $this->hasMany(ChecklistTask::class, 'solicitud_acces_id');
+    }
+    
+    public function processMobilitat(): BelongsTo
+    {
+        return $this->belongsTo(ProcessMobilitat::class, 'process_mobilitat_id');
     }
 
     // Scopes
@@ -164,18 +178,38 @@ class SolicitudAcces extends Model
         return 'SOL-' . now()->format('YmdHis') . '-' . strtoupper(substr(md5(uniqid()), 0, 8));
     }
 
+    /**
+     * Comprovar l'estat de les validacions de la sol·licitud.
+     * 
+     * Aquest mètode comprova l'estat de les validacions de la sol·licitud i actualitza l'estat de la sol·licitud en conseqüència.
+     * 
+     * @return void
+     */
     public function comprovarEstatValidacions(): void
     {
+        // Comptar el total de validacions
         $totalValidacions = $this->validacions()->count();
+        
+        // Comptar les validacions rebutjades
         $validacionsRebutjades = $this->validacions()->where('estat', 'rebutjada')->count();
+        
+        // Comptar les validacions aprovades
         $validacionsAprovades = $this->validacions()->where('estat', 'aprovada')->count();
 
+        // Si hi ha alguna validació rebutjada, canviar l'estat de la sol·licitud a rebutjada
         if ($validacionsRebutjades > 0) {
             $this->update(['estat' => 'rebutjada']);
+            // Notificació de rebuig de forma asíncrona
             dispatch(new \App\Jobs\NotificarSolicitudRebutjada($this));
-        } elseif ($validacionsAprovades === $totalValidacions && $totalValidacions > 0) {
+        } 
+        // Si totes les validacions estan aprovades, canviar l'estat de la sol·licitud a aprovada
+        elseif ($validacionsAprovades === $totalValidacions && $totalValidacions > 0) {
+            // Quan totes les validacions estan aprovades, canviar estat immediatament
+            // L'Observer s'encarregarà de processar la sol·licitud de forma síncrona
             $this->update(['estat' => 'aprovada']);
-        } elseif ($validacionsAprovades > 0 || $this->estat === 'pendent') {
+        } 
+        // Si hi ha alguna validació aprovada o l'estat de la sol·licitud és pendent, canviar l'estat a validant
+        elseif ($validacionsAprovades > 0 || $this->estat === 'pendent') {
             $this->update(['estat' => 'validant']);
         }
     }
@@ -241,6 +275,42 @@ class SolicitudAcces extends Model
         }
 
         return $this->created_at->diffInDays($this->updated_at);
+    }
+
+    // ================================
+    // EXTENSIÓ HÍBRIDA - ELEMENTS EXTRA
+    // ================================
+
+    /**
+     * Elements extra sol·licitats (nova funcionalitat híbrida)
+     */
+    public function elementsExtra(): HasMany
+    {
+        return $this->hasMany(SolicitudElementExtra::class, 'solicitud_id');
+    }
+
+    /**
+     * Verificar si aquesta sol·licitud té elements extra
+     */
+    public function teElementsExtra(): bool
+    {
+        return $this->elementsExtra()->exists();
+    }
+
+    /**
+     * Obtenir resum complet de la sol·licitud (simple + híbrid)
+     */
+    public function getResumComplet(): array
+    {
+        return [
+            'solicitud' => $this,
+            'te_elements_extra' => $this->teElementsExtra(),
+            'sistemes_simples' => $this->sistemesSolicitats,
+            'elements_extra' => $this->elementsExtra,
+            'tipus' => $this->teElementsExtra() ? 'híbrida' : 'simple',
+            'resum_validacions' => $this->getResumValidacions(),
+            'total_elements' => $this->sistemesSolicitats->count() + $this->elementsExtra->count()
+        ];
     }
  
 // ================================

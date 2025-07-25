@@ -5,11 +5,32 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
 class SolicitudSistema extends Model
 {
     use HasFactory;
+    
+    protected static function booted()
+    {
+        static::created(function ($solicitudSistema) {
+            $solicitud = $solicitudSistema->solicitud;
+            
+            // Només crear validacions si és el primer sistema afegit i la sol·licitud està pendent
+            if ($solicitud->estat === 'pendent' && $solicitud->sistemesSolicitats()->count() === 1) {
+                // Crear validacions de forma síncrona
+                try {
+                    $job = new \App\Jobs\CrearValidacionsSolicitud($solicitud);
+                    $job->handle();
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Error creant validacions síncronament des de SolicitudSistema: {$e->getMessage()}");
+                    // Fallback asíncron
+                    dispatch(new \App\Jobs\CrearValidacionsSolicitud($solicitud));
+                }
+            }
+        });
+    }
 
     protected $table = 'solicitud_sistemes';
 
@@ -40,6 +61,11 @@ class SolicitudSistema extends Model
     public function nivellAcces(): BelongsTo
     {
         return $this->belongsTo(NivellAccesSistema::class, 'nivell_acces_id');
+    }
+
+    public function elementsExtra(): HasMany
+    {
+        return $this->hasMany(SolicitudElementExtra::class, 'solicitud_sistema_id');
     }
 
     // Scopes

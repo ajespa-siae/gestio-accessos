@@ -24,10 +24,11 @@ class CrearValidacionsSolicitud implements ShouldQueue
 
     public function handle(): void
     {
-        Log::info("Creant validacions per solicitud: {$this->solicitud->identificador_unic}");
+        $startTime = microtime(true);
+        Log::info("[INICI] Creant validacions per solicitud: {$this->solicitud->identificador_unic}");
         
         // Utilitzar transacció per assegurar consistència
-        DB::transaction(function () {
+        DB::transaction(function () use ($startTime) {
             $totalValidacions = 0;
             
             foreach ($this->solicitud->sistemesSolicitats as $sistemaSol) {
@@ -65,6 +66,10 @@ class CrearValidacionsSolicitud implements ShouldQueue
             
             Log::info("Total validacions creades: {$totalValidacions} per solicitud: {$this->solicitud->identificador_unic}");
         });
+        
+        $endTime = microtime(true);
+        $duration = round(($endTime - $startTime) * 1000, 2);
+        Log::info("[FI] Validacions creades en {$duration}ms per solicitud: {$this->solicitud->identificador_unic}");
         
         // Notificar validadors (fora de la transacció)
         NotificarValidadorsPendents::dispatch($this->solicitud);
@@ -156,7 +161,9 @@ class CrearValidacionsSolicitud implements ShouldQueue
         }
         
         // Crear validació de grup
-        $this->solicitud->validacions()->create([
+        Log::info("Creant validació de grup per sistema {$sistemaId} amb gestor representant {$gestorRepresentant->name}");
+        
+        $validacio = $this->solicitud->validacions()->create([
             'sistema_id' => $sistemaId,
             'validador_id' => $gestorRepresentant->id, // Representant del grup
             'estat' => 'pendent',
@@ -164,6 +171,8 @@ class CrearValidacionsSolicitud implements ShouldQueue
             'config_validador_id' => $configValidador->id,
             'grup_validadors_ids' => $gestors->pluck('id')->toArray(),
         ]);
+        
+        Log::info("Validació creada amb ID: {$validacio->id}");
         
         $departamentNom = $configValidador->getDepartamentValidadorNom();
         Log::info("Validació de grup creada per {$gestors->count()} gestors del departament {$departamentNom} al sistema {$sistemaId}");

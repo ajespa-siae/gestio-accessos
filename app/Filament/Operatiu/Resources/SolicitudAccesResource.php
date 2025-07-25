@@ -7,6 +7,8 @@ use App\Filament\Operatiu\Resources\SolicitudAccesResource\RelationManagers;
 use App\Models\SolicitudAcces;
 use App\Models\Empleat;
 use App\Models\User;
+use App\Models\Sistema;
+use App\Models\SistemaElementExtra;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -18,6 +20,10 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Fieldset;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Placeholder;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -117,15 +123,38 @@ class SolicitudAccesResource extends Resource
                                     ->searchable()
                                     ->required()
                                     ->reactive()
-                                    ->afterStateUpdated(fn (callable $set) => $set('nivell_acces_id', null))
+                                    ->afterStateUpdated(function (callable $set, $state) {
+                                        $set('nivell_acces_id', null);
+                                        // Reset elements extra quan canvia el sistema
+                                        $set('elements_extra', []);
+                                    })
                                     ->label('Sistema'),
                                     
-                                Textarea::make('descripcio')
-                                    ->label('Descripció de l\'accés')
-                                    ->required()
-                                    ->maxLength(500)
+                                // Mostrar informació del tipus de sistema
+                                Placeholder::make('tipus_sistema_info')
+                                    ->label('')
+                                    ->content(function (callable $get) {
+                                        $sistemaId = $get('sistema_id');
+                                        if (!$sistemaId) {
+                                            return '';
+                                        }
+                                        
+                                        $sistema = Sistema::with('elementsExtra')->find($sistemaId);
+                                        if (!$sistema) {
+                                            return '';
+                                        }
+                                        
+                                        $esHibrid = $sistema->teElementsComplexos();
+                                        $tipus = $esHibrid ? 'Híbrid' : 'Simple';
+                                        $color = $esHibrid ? 'warning' : 'success';
+                                        $icon = $esHibrid ? '🔧' : '📄';
+                                        
+                                        return "<div class='text-sm'><span class='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-{$color}-100 text-{$color}-800'>{$icon} Sistema {$tipus}</span></div>";
+                                    })
+                                    ->visible(fn (callable $get) => !empty($get('sistema_id')))
                                     ->columnSpanFull(),
                                     
+                                // Nivells d'accés (sempre visible)
                                 Select::make('nivell_acces_id')
                                     ->label('Nivell d\'Accés')
                                     ->options(function (callable $get) {
@@ -140,7 +169,96 @@ class SolicitudAccesResource extends Resource
                                             ->pluck('nom', 'id');
                                     })
                                     ->searchable()
-                                    ->required(),
+                                    ->required()
+                                    ->visible(fn (callable $get) => !empty($get('sistema_id'))),
+                                    
+                                // Elements extra (només per sistemes híbrids)
+                                Fieldset::make('Elements Extra')
+                                    ->schema([
+                                        Repeater::make('elements_extra')
+                                            ->schema([
+                                                Select::make('element_extra_id')
+                                                    ->label('Element')
+                                                    ->options(function (callable $get) {
+                                                        $sistemaId = $get('../../sistema_id');
+                                                        if (!$sistemaId) {
+                                                            return [];
+                                                        }
+                                                        
+                                                        return SistemaElementExtra::where('sistema_id', $sistemaId)
+                                                            ->where('actiu', true)
+                                                            ->orderBy('ordre')
+                                                            ->pluck('nom', 'id');
+                                                    })
+                                                    ->required()
+                                                    ->reactive()
+                                                    ->afterStateUpdated(function (callable $set) {
+                                                        $set('opcio_seleccionada', null);
+                                                        $set('valor_text_lliure', null);
+                                                    }),
+                                                    
+                                                Select::make('opcio_seleccionada')
+                                                    ->label('Opció')
+                                                    ->options(function (callable $get) {
+                                                        $elementId = $get('element_extra_id');
+                                                        if (!$elementId) {
+                                                            return [];
+                                                        }
+                                                        
+                                                        $element = SistemaElementExtra::find($elementId);
+                                                        if (!$element || !$element->teOpcions()) {
+                                                            return [];
+                                                        }
+                                                        
+                                                        return array_combine($element->opcions_disponibles, $element->opcions_disponibles);
+                                                    })
+                                                    ->visible(function (callable $get) {
+                                                        $elementId = $get('element_extra_id');
+                                                        if (!$elementId) {
+                                                            return false;
+                                                        }
+                                                        
+                                                        $element = SistemaElementExtra::find($elementId);
+                                                        return $element && $element->teOpcions();
+                                                    }),
+                                                    
+                                                Textarea::make('valor_text_lliure')
+                                                    ->label('Text Personalitzat')
+                                                    ->rows(2)
+                                                    ->visible(function (callable $get) {
+                                                        $elementId = $get('element_extra_id');
+                                                        if (!$elementId) {
+                                                            return false;
+                                                        }
+                                                        
+                                                        $element = SistemaElementExtra::find($elementId);
+                                                        return $element && $element->acceptaTextLliure();
+                                                    }),
+                                            ])
+                                            ->columns(1)
+                                            ->itemLabel(function (array $state) {
+                                                if (empty($state['element_extra_id'])) {
+                                                    return 'Element Extra';
+                                                }
+                                                
+                                                $element = SistemaElementExtra::find($state['element_extra_id']);
+                                                return $element ? $element->nom : 'Element Extra';
+                                            })
+                                            ->addActionLabel('Afegir Element Extra')
+                                            ->collapsible()
+                                            ->reorderable(false)
+                                            ->defaultItems(0),
+                                    ])
+                                    ->visible(function (callable $get) {
+                                        $sistemaId = $get('sistema_id');
+                                        if (!$sistemaId) {
+                                            return false;
+                                        }
+                                        
+                                        $sistema = Sistema::find($sistemaId);
+                                        return $sistema && $sistema->teElementsComplexos();
+                                    })
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2)
                             ->itemLabel(fn (array $state): ?string => $state['sistema_id'] ?? null)

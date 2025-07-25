@@ -34,8 +34,14 @@ class DatabaseSeeder extends Seeder
         // Configuració inicial
         $this->crearConfiguracio();
         
+        // Crear rols bàsics del sistema
+        $this->call(RoleSeeder::class);
+        
         // Crear empleats d'exemple
         $this->call(EmpleatSeeder::class);
+        
+        // Assignar permisos de mobilitat
+        $this->call(ProcessMobilitatPermissionsSeeder::class);
     }
 
     private function crearUsuaris(): void

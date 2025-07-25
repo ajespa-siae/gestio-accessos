@@ -38,12 +38,6 @@ class SolicitudSistemesRelationManager extends RelationManager
                     ->reactive()
                     ->afterStateUpdated(fn (callable $set) => $set('nivell_acces_id', null)),
                     
-                Textarea::make('descripcio')
-                    ->label('Descripció de l\'accés')
-                    ->required()
-                    ->maxLength(500)
-                    ->columnSpanFull(),
-                    
                 Select::make('nivell_acces_id')
                     ->label('Nivell d\'Accés')
                     ->options(function (callable $get) {
@@ -71,11 +65,6 @@ class SolicitudSistemesRelationManager extends RelationManager
                     ->label('Sistema')
                     ->searchable()
                     ->sortable(),
-                    
-                TextColumn::make('descripcio')
-                    ->label('Descripció')
-                    ->limit(50)
-                    ->tooltip(fn ($record) => $record->descripcio),
                     
                 TextColumn::make('nivellAcces.nom')
                     ->label('Nivell d\'Accés')
