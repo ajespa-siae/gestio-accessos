@@ -5,16 +5,12 @@ namespace App\Jobs;
 use App\Models\Empleat;
 use App\Models\ChecklistTemplate;
 use App\Models\ChecklistInstance;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class CrearChecklistOffboarding implements ShouldQueue
+class CrearChecklistOffboarding
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
 
     public function __construct(
         public Empleat $empleat
@@ -57,10 +53,13 @@ class CrearChecklistOffboarding implements ShouldQueue
 
     private function marcarAccessosPerRevocar(): void
     {
+        // TODO: Implementar revocació d'accessos quan estigui disponible el camp requires_revocation
         // Marcar totes les sol·licituds actives per revocació
-        $this->empleat->solicitudsAcces()
-            ->whereIn('estat', ['aprovada', 'finalitzada'])
-            ->update(['requires_revocation' => true]);
+        // $this->empleat->solicitudsAcces()
+        //     ->whereIn('estat', ['aprovada', 'finalitzada'])
+        //     ->update(['requires_revocation' => true]);
+        
+        Log::info("Accessos de {$this->empleat->identificador_unic} marcats per revocació (simulat)");
     }
 
     private function crearTemplateOffboardingBasic(): void

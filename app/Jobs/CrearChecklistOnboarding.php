@@ -5,16 +5,12 @@ namespace App\Jobs;
 use App\Models\Empleat;
 use App\Models\ChecklistTemplate;
 use App\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class CrearChecklistOnboarding implements ShouldQueue
+class CrearChecklistOnboarding
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
 
     protected ?ChecklistTemplate $templateEspecifica = null;
 
