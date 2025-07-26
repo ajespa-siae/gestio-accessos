@@ -53,13 +53,49 @@ class CrearChecklistOffboarding
 
     private function marcarAccessosPerRevocar(): void
     {
-        // TODO: Implementar revocació d'accessos quan estigui disponible el camp requires_revocation
-        // Marcar totes les sol·licituds actives per revocació
-        // $this->empleat->solicitudsAcces()
-        //     ->whereIn('estat', ['aprovada', 'finalitzada'])
-        //     ->update(['requires_revocation' => true]);
+        // Obtenir totes les sol·licituds d'accés actives de l'empleat
+        $solicitudsActives = $this->empleat->solicitudsAcces()
+            ->whereIn('estat', ['aprovada', 'finalitzada'])
+            ->with(['sistemesSolicitats.sistema', 'sistemesSolicitats.nivellAcces'])
+            ->get();
+            
+        if ($solicitudsActives->isEmpty()) {
+            Log::info("No hi ha accessos actius per revocar per {$this->empleat->identificador_unic}");
+            return;
+        }
         
-        Log::info("Accessos de {$this->empleat->identificador_unic} marcats per revocació (simulat)");
+        $tasquesCreades = 0;
+        
+        foreach ($solicitudsActives as $solicitud) {
+            foreach ($solicitud->sistemesSolicitats as $sistemaSol) {
+                $sistema = $sistemaSol->sistema;
+                $nivell = $sistemaSol->nivellAcces;
+                
+                // Crear tasca de revocació per cada sistema
+                \App\Models\ChecklistTask::create([
+                    'checklist_instance_id' => null, // Tasca independent
+                    'solicitud_acces_id' => $solicitud->id,
+                    'nom' => "Revocar accés: {$sistema->nom}",
+                    'descripcio' => "REVOCACIÓ PER BAIXA EMPLEAT\n" .
+                                   "Empleat: {$this->empleat->nom_complet}\n" .
+                                   "Departament: {$this->empleat->departament->nom}\n" .
+                                   "Nivell d'accés: {$nivell->nom}\n" .
+                                   "Data baixa: {$this->empleat->data_baixa->format('d/m/Y')}\n" .
+                                   "Sol·licitud original: {$solicitud->identificador_unic}",
+                    'ordre' => 1,
+                    'obligatoria' => true,
+                    'completada' => false,
+                    'data_assignacio' => now(),
+                    'usuari_assignat_id' => null, // Assignació manual posterior
+                    'rol_assignat' => $sistema->rol_gestor_defecte ?? 'it',
+                    'observacions' => "Revocació automàtica per baixa empleat: {$this->empleat->identificador_unic}"
+                ]);
+                
+                $tasquesCreades++;
+            }
+        }
+        
+        Log::info("Creades {$tasquesCreades} tasques de revocació per {$this->empleat->identificador_unic}");
     }
 
     private function crearTemplateOffboardingBasic(): void
