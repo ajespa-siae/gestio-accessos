@@ -146,10 +146,9 @@ class SolicitudAccesResource extends Resource
                                         
                                         $esHibrid = $sistema->teElementsComplexos();
                                         $tipus = $esHibrid ? 'Híbrid' : 'Simple';
-                                        $color = $esHibrid ? 'warning' : 'success';
                                         $icon = $esHibrid ? '🔧' : '📄';
                                         
-                                        return "<div class='text-sm'><span class='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-{$color}-100 text-{$color}-800'>{$icon} Sistema {$tipus}</span></div>";
+                                        return "{$icon} Sistema {$tipus}";
                                     })
                                     ->visible(fn (callable $get) => !empty($get('sistema_id')))
                                     ->columnSpanFull(),
