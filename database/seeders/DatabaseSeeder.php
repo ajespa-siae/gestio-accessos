@@ -42,6 +42,9 @@ class DatabaseSeeder extends Seeder
         
         // Assignar permisos de mobilitat
         $this->call(ProcessMobilitatPermissionsSeeder::class);
+        
+        // Crear sistema Eacat amb els seus elements
+        $this->call(EacatSistemaSeeder::class);
     }
 
     private function crearUsuaris(): void

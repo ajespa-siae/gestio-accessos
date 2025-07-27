@@ -19,11 +19,15 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
+use Awcodes\TableRepeater\Components\TableRepeater;
+use Awcodes\TableRepeater\Header;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Fieldset;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Actions\Action;
+use Illuminate\Support\HtmlString;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -117,6 +121,15 @@ class SolicitudAccesResource extends Resource
                     ->schema([
                         Repeater::make('sistemesSolicitats')
                             ->relationship()
+                            ->label('')
+                            ->itemLabel(function (array $state): string {
+                                if (empty($state) || empty($state['sistema_id'])) {
+                                    return 'Escull un sistema';
+                                }
+                                
+                                $sistema = Sistema::find($state['sistema_id']);
+                                return $sistema ? $sistema->nom : 'Escull un sistema';
+                            })
                             ->schema([
                                 Select::make('sistema_id')
                                     ->relationship('sistema', 'nom')
@@ -173,12 +186,23 @@ class SolicitudAccesResource extends Resource
                                     ->visible(fn (callable $get) => !empty($get('sistema_id'))),
                                     
                                 // Elements extra (només per sistemes híbrids)
-                                Fieldset::make('Elements Extra')
+                                Fieldset::make()
                                     ->schema([
-                                        Repeater::make('elements_extra')
+                                        TableRepeater::make('elements_extra')
+                                            ->label('Opcions del Sistema')
+                                            ->headers([
+                                                Header::make('element_extra_id')
+                                                    ->label('Element')
+                                                    ->width('40%'),
+                                                Header::make('opcio_seleccionada')
+                                                    ->label('Opció')
+                                                    ->width('30%'),
+                                                Header::make('valor_text_lliure')
+                                                    ->label('Text Personalitzat')
+                                                    ->width('30%'),
+                                            ])
                                             ->schema([
                                                 Select::make('element_extra_id')
-                                                    ->label('Element')
                                                     ->options(function (callable $get) {
                                                         $sistemaId = $get('../../sistema_id');
                                                         if (!$sistemaId) {
@@ -198,7 +222,6 @@ class SolicitudAccesResource extends Resource
                                                     }),
                                                     
                                                 Select::make('opcio_seleccionada')
-                                                    ->label('Opció')
                                                     ->options(function (callable $get) {
                                                         $elementId = $get('element_extra_id');
                                                         if (!$elementId) {
@@ -222,9 +245,8 @@ class SolicitudAccesResource extends Resource
                                                         return $element && $element->teOpcions();
                                                     }),
                                                     
-                                                Textarea::make('valor_text_lliure')
-                                                    ->label('Text Personalitzat')
-                                                    ->rows(2)
+                                                TextInput::make('valor_text_lliure')
+                                                    ->placeholder('Text personalitzat...')
                                                     ->visible(function (callable $get) {
                                                         $elementId = $get('element_extra_id');
                                                         if (!$elementId) {
@@ -235,19 +257,11 @@ class SolicitudAccesResource extends Resource
                                                         return $element && $element->acceptaTextLliure();
                                                     }),
                                             ])
-                                            ->columns(1)
-                                            ->itemLabel(function (array $state) {
-                                                if (empty($state['element_extra_id'])) {
-                                                    return 'Element Extra';
-                                                }
-                                                
-                                                $element = SistemaElementExtra::find($state['element_extra_id']);
-                                                return $element ? $element->nom : 'Element Extra';
-                                            })
-                                            ->addActionLabel('Afegir Element Extra')
-                                            ->collapsible()
+                                            ->addActionLabel('Afegir Opció')
                                             ->reorderable(false)
-                                            ->defaultItems(0),
+                                            ->defaultItems(0)
+                                            ->emptyLabel('No hi ha opcions afegides')
+                                            ->columnSpan('full'),
                                     ])
                                     ->visible(function (callable $get) {
                                         $sistemaId = $get('sistema_id');
@@ -261,13 +275,35 @@ class SolicitudAccesResource extends Resource
                                     ->columnSpanFull(),
                             ])
                             ->columns(2)
-                            ->itemLabel(fn (array $state): ?string => $state['sistema_id'] ?? null)
+                            // itemLabel ya definido arriba
                             ->addActionLabel('Afegir Sistema')
                             ->minItems(1)
                             ->collapsible()
-                            ->collapsed()
-                            ->reorderable()
-                            ->defaultItems(1),
+                            ->collapsed(false) // Primera tarjeta expandida por defecto
+                            ->defaultItems(1)
+                            ->cloneable(false)
+                            ->addAction(
+                                fn (Action $action) => $action
+                                    ->extraAttributes(fn($component) => [
+                                        'x-on:click' => new HtmlString('$dispatch(\'repeater-collapse\', \''. $component->getStatePath() .'\')')
+                                    ])
+                            )
+                            ->extraAttributes([
+                                'x-on:repeater-collapse' => '
+                                    if ($event.detail === "'. 'sistemesSolicitats' .'") {
+                                        // Colapsar todos los items excepto el último
+                                        const items = $el.querySelectorAll("[data-sortable-item]");
+                                        items.forEach((item, index) => {
+                                            if (index < items.length - 1) {
+                                                const collapseBtn = item.querySelector("[x-data*=\"collapsed\"]");
+                                                if (collapseBtn && !item.hasAttribute("data-collapsed")) {
+                                                    collapseBtn.click();
+                                                }
+                                            }
+                                        });
+                                    }
+                                '
+                            ])
                     ])
                     ->hiddenOn('edit'), // Solo mostrar en creación
             ]);

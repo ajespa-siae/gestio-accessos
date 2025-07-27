@@ -26,7 +26,7 @@ class ElementsExtraRelationManager extends RelationManager
 {
     protected static string $relationship = 'elementsExtra';
 
-    protected static ?string $title = 'Elements Extra';
+    protected static ?string $title = 'Opcions Sistema';
 
     protected static ?string $modelLabel = 'Element Extra';
 
