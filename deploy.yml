@@ -40,7 +40,8 @@ project:
       # Generar políticas para ambos paneles sin interacción
       - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=admin --no-interaction || echo "Error al generar políticas de Shield para panel admin, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:generate --all --panel=operatiu --no-interaction || echo "Error al generar políticas de Shield para panel operatiu, continuando de todos modos"'
-      - 'cd {release_directory} && php8.4 artisan shield:super-admin --user=8 || echo "Error al asignar super_admin, continuando de todos modos"'
+      # Obtener ID del usuario por email y asignar super admin
+      - 'cd {release_directory} && USER_ID=$(php8.4 artisan tinker --execute="echo App\\Models\\User::where(\"email\", \"campmanysm@esparreguera.cat\")->first()->id ?? \"0\";") && if [ "$USER_ID" != "0" ]; then php8.4 artisan shield:super-admin --user=$USER_ID; else echo "Usuario campmanysm@esparreguera.cat no encontrado"; fi || echo "Error al asignar super_admin, continuando de todos modos"'
       - 'cd {release_directory} && php8.4 artisan shield:assign-all-permissions || echo "Error al asignar todos los permisos al super_admin, continuando de todos modos"'
       
       # Verificar y corregir la configuración de Shield

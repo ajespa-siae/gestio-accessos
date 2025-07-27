@@ -121,6 +121,7 @@ class SolicitudAccesResource extends Resource
                                 Select::make('sistema_id')
                                     ->relationship('sistema', 'nom')
                                     ->searchable()
+                                    ->preload()
                                     ->required()
                                     ->reactive()
                                     ->afterStateUpdated(function (callable $set, $state) {
