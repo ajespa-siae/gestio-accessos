@@ -16,17 +16,6 @@ class ListChecklistTemplates extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nova Plantilla'),
-            
-            Action::make('import_default')
-                ->label('Crear Plantilles per Defecte')
-                ->icon('heroicon-o-plus-circle')
-                ->color('info')
-                ->action(function () {
-                    $this->crearPlantillesPerDefecte();
-                })
-                ->requiresConfirmation()
-                ->modalHeading('Crear plantilles per defecte')
-                ->modalDescription('Això crearà plantilles estàndard d\'onboarding i offboarding. Continuar?'),
         ];
     }
     

@@ -18,7 +18,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Fieldset;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
+
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\Filter;
@@ -31,6 +31,8 @@ use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChecklistTemplateResource extends Resource
 {
@@ -105,15 +107,18 @@ class ChecklistTemplateResource extends Resource
                     ->sortable()
                     ->searchable(),
                 
-                BadgeColumn::make('tipus')
-                    ->colors([
-                        'success' => 'onboarding',
-                        'warning' => 'offboarding',
-                    ])
-                    ->icons([
-                        'heroicon-o-user-plus' => 'onboarding',
-                        'heroicon-o-user-minus' => 'offboarding',
-                    ]),
+                TextColumn::make('tipus')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'onboarding' => 'success',
+                        'offboarding' => 'warning',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'onboarding' => 'heroicon-o-user-plus',
+                        'offboarding' => 'heroicon-o-user-minus',
+                        default => 'heroicon-o-document',
+                    }),
                 
                 TextColumn::make('tasquesTemplate_count')
                     ->label('Tasques')
@@ -150,8 +155,7 @@ class ChecklistTemplateResource extends Resource
                 
                 Filter::make('actives')
                     ->label('Només actives')
-                    ->query(fn (Builder $query): Builder => $query->where('actiu', true))
-                    ->default(),
+                    ->query(fn (Builder $query): Builder => $query->where('actiu', true)),
                 
                 Filter::make('globals')
                     ->label('Plantilles globals')
@@ -165,32 +169,43 @@ class ChecklistTemplateResource extends Resource
                     ->icon('heroicon-o-document-duplicate')
                     ->color('info')
                     ->action(function (ChecklistTemplate $record) {
-                        $newTemplate = $record->replicate();
-                        $newTemplate->nom = $record->nom . ' (Còpia)';
-                        $newTemplate->actiu = false;
-                        $newTemplate->save();
-                        
-                        // Duplicar les tasques
-                        foreach ($record->tasquesTemplate as $tasca) {
-                            $newTasca = $tasca->replicate();
-                            $newTasca->template_id = $newTemplate->id;
-                            $newTasca->save();
+                        try {
+                            \DB::beginTransaction();
+                            
+                            $newTemplate = $record->duplicar();
+                            
+                            // Verificar que s'ha creat correctament
+                            if (!$newTemplate || !$newTemplate->exists) {
+                                throw new \Exception('No s\'ha pogut crear la nova plantilla');
+                            }
+                            
+                            \DB::commit();
+                            
+                            Notification::make()
+                                ->title('Plantilla duplicada correctament')
+                                ->body("Nova plantilla: {$newTemplate->nom} (ID: {$newTemplate->id}). La plantilla s'ha creat com a INACTIVA per revisió.")
+                                ->success()
+                                ->send();
+                            
+                        } catch (\Exception $e) {
+                            \DB::rollBack();
+                            
+                            \Log::error('Error duplicant plantilla checklist', [
+                                'plantilla_id' => $record->id,
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString()
+                            ]);
+                            
+                            Notification::make()
+                                ->title('Error al duplicar la plantilla')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
                         }
-                        
-                        Notification::make()
-                            ->title('Plantilla duplicada correctament')
-                            ->success()
-                            ->send();
                     }),
                 
-                Action::make('preview')
-                    ->label('Vista prèvia')
-                    ->icon('heroicon-o-eye')
-                    ->color('gray')
-                    ->url(fn (ChecklistTemplate $record): string => 
-                        static::getUrl('view', ['record' => $record])),
-                
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->successNotificationTitle('Plantilla eliminada correctament')
             ])
             ->bulkActions([
                 BulkActionGroup::make([

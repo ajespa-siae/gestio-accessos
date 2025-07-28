@@ -8,7 +8,6 @@ use Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\IconEntry;
-use Filament\Infolists\Components\BadgeEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -35,11 +34,13 @@ class ViewChecklistTemplate extends ViewRecord
                                 TextEntry::make('nom')
                                     ->label('Nom'),
                                 
-                                BadgeEntry::make('tipus')
-                                    ->colors([
-                                        'success' => 'onboarding',
-                                        'warning' => 'offboarding',
-                                    ]),
+                                TextEntry::make('tipus')
+                                    ->badge()
+                                    ->color(fn (string $state): string => match ($state) {
+                                        'onboarding' => 'success',
+                                        'offboarding' => 'warning',
+                                        default => 'gray',
+                                    }),
                                 
                                 IconEntry::make('actiu')
                                     ->boolean(),
@@ -72,12 +73,17 @@ class ViewChecklistTemplate extends ViewRecord
                                             ->weight('medium')
                                             ->columnSpan(2),
                                         
-                                        BadgeEntry::make('rol_assignat')
-                                            ->colors([
-                                                'danger' => 'it',
-                                                'warning' => 'rrhh',
-                                                'success' => 'gestor',
-                                            ]),
+                                        TextEntry::make('rol_assignat')
+                                            ->badge()
+                                            ->color(fn (string $state): string => match ($state) {
+                                                'it' => 'danger',
+                                                'rrhh' => 'warning', 
+                                                'gestor' => 'success',
+                                                'seguretat' => 'info',
+                                                'administracio' => 'purple',
+                                                'supervisor' => 'orange',
+                                                default => 'gray',
+                                            }),
                                     ]),
                                 
                                 TextEntry::make('descripcio')

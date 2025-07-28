@@ -93,17 +93,42 @@ class ChecklistTemplate extends Model
     {
         $nouNom = $nouNom ?: $this->nom . ' (Còpia)';
         
-        $novaPlantilla = $this->replicate();
-        $novaPlantilla->nom = $nouNom;
-        $novaPlantilla->actiu = false; // Les còpies es creen inactives
-        $novaPlantilla->save();
+        // Crear nova plantilla només amb els camps fillable
+        $novaPlantilla = static::create([
+            'nom' => $nouNom,
+            'departament_id' => $this->departament_id,
+            'tipus' => $this->tipus,
+            'actiu' => false, // Les còpies es creen inactives
+        ]);
+
+        if (!$novaPlantilla) {
+            throw new \Exception('No s\'ha pogut crear la nova plantilla');
+        }
 
         // Duplicar les tasques
+        $tasquesCopiades = 0;
         foreach ($this->tasquesTemplate as $tasca) {
-            $novaTasca = $tasca->replicate();
-            $novaTasca->template_id = $novaPlantilla->id;
-            $novaTasca->save();
+            try {
+                $novaTasca = $tasca->replicate();
+                $novaTasca->template_id = $novaPlantilla->id;
+                $novaTasca->save();
+                $tasquesCopiades++;
+            } catch (\Exception $e) {
+                \Log::warning('Error copiant tasca de plantilla', [
+                    'plantilla_original' => $this->id,
+                    'plantilla_nova' => $novaPlantilla->id,
+                    'tasca_id' => $tasca->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
+
+        \Log::info('Plantilla duplicada', [
+            'plantilla_original' => $this->id,
+            'plantilla_nova' => $novaPlantilla->id,
+            'tasques_copiades' => $tasquesCopiades,
+            'total_tasques' => $this->tasquesTemplate->count()
+        ]);
 
         return $novaPlantilla;
     }
