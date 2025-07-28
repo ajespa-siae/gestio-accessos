@@ -17,8 +17,6 @@ class ListSistemes extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nou Sistema')
-                ->icon('heroicon-o-plus')
-                ->color('success'),
         ];
     }
     

@@ -98,28 +98,6 @@ class SistemaResource extends Resource
                         return $column->getState();
                     }),
                     
-                BadgeColumn::make('nivells_acces_count')
-                    ->label('Nivells d\'Accés')
-                    ->counts('nivellsAcces')
-                    ->color('info')
-                    ->icon('heroicon-o-key'),
-                    
-                BadgeColumn::make('validadors_count')
-                    ->label('Validadors')
-                    ->counts('validadors')
-                    ->color(fn (int $state): string => match (true) {
-                        $state === 0 => 'danger',
-                        $state <= 2 => 'warning',
-                        default => 'success',
-                    })
-                    ->icon('heroicon-o-users'),
-                    
-                BadgeColumn::make('elements_extra_count')
-                    ->label('Elements Extra')
-                    ->counts('elementsExtra')
-                    ->color(fn (int $state): string => $state > 0 ? 'info' : 'gray')
-                    ->icon('heroicon-o-puzzle-piece'),
-                    
                 BadgeColumn::make('tipus_formulari')
                     ->label('Tipus Formulari')
                     ->getStateUsing(fn (Sistema $record): string => 
@@ -135,12 +113,6 @@ class SistemaResource extends Resource
                         'Simple' => 'heroicon-o-document-text',
                         default => 'heroicon-o-question-mark-circle',
                     }),
-                    
-                BadgeColumn::make('departaments_count')
-                    ->label('Departaments')
-                    ->counts('departaments')
-                    ->color('success')
-                    ->icon('heroicon-o-building-office'),
                     
                 BadgeColumn::make('rol_gestor_defecte')
                     ->label('Rol Gestor')
