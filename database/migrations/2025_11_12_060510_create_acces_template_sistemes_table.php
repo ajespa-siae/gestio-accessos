@@ -11,7 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('template_id')->constrained('acces_templates')->cascadeOnDelete();
             $table->foreignId('sistema_id')->constrained('sistemes')->cascadeOnDelete();
-            $table->foreignId('nivell_acces_id')->constrained('nivell_acces_sistemes')->cascadeOnDelete();
+            $table->foreignId('nivell_acces_id')->constrained('nivells_acces_sistema')->cascadeOnDelete();
             $table->unsignedInteger('ordre')->default(1);
             $table->boolean('actiu')->default(true);
             $table->timestamps();
