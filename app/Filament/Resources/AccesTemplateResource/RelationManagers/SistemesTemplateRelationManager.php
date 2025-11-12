@@ -75,7 +75,9 @@ class SistemesTemplateRelationManager extends RelationManager
                             ->headers([
                                 Header::make('element_extra_id')->label('Element')->width('40%'),
                                 Header::make('opcio_seleccionada')->label('Opció')->width('30%'),
-                                Header::make('valor_text_lliure')->label('Text personalitzat')->width('30%'),
+                                Header::make('valor_text_lliure')->label('Text personalitzat')->width('20%'),
+                                Header::make('ordre')->label('Ordre')->width('5%'),
+                                Header::make('actiu')->label('Actiu')->width('5%'),
                             ])
                             ->schema([
                                 Select::make('element_extra_id')
