@@ -43,6 +43,8 @@ class SistemesTemplateRelationManager extends RelationManager
                             ->reactive()
                             ->afterStateUpdated(function (callable $set) {
                                 $set('nivell_acces_id', null);
+                                // Reset elements extra quan canvia el sistema
+                                $set('elementsExtra', []);
                             }),
 
                         Select::make('nivell_acces_id')
@@ -128,7 +130,15 @@ class SistemesTemplateRelationManager extends RelationManager
                             ->emptyLabel('Sense elements extra')
                             ->columnSpan('full'),
                     ])
-                    ->columns(1),
+                    ->columns(1)
+                    ->visible(function (callable $get) {
+                        $sistemaId = $get('sistema_id');
+                        if (!$sistemaId) {
+                            return false;
+                        }
+                        $sistema = \App\Models\Sistema::find($sistemaId);
+                        return $sistema && method_exists($sistema, 'teElementsComplexos') && $sistema->teElementsComplexos();
+                    }),
             ]);
     }
 
